@@ -1,0 +1,7 @@
+{
+  "name": "Remix: BUYERSONA",
+  "description": "Descubre tu cliente ideal. Define tu estrategia. Crece sin romper tu operación.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
