@@ -1564,21 +1564,7 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
             {t.back}
           </button>
 
-          {/* Dev Skip Button */}
-          <button
-            onClick={() => {
-              if (currentStep < TOTAL_STEPS - 1) {
-                const nextStep = currentStep + 1;
-                setCurrentStep(nextStep);
-                if (onStepChange) onStepChange(nextStep, formData);
-              }
-              else onComplete(formData);
-            }}
-            className="absolute left-1/2 transform -translate-x-1/2 text-xs text-slate-300 hover:text-indigo-400 font-mono border border-slate-200 px-2 py-1 rounded bg-slate-50"
-            title="Development only: Skip validation"
-          >
-            [SKIP / OMITIR]
-          </button>
+
 
           <button
             onClick={next}
