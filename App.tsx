@@ -40,6 +40,13 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 function LandingPageWrapper({ lang, setLang }: { lang: Language; setLang: (l: Language) => void }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  React.useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   return (
     <LandingPage
