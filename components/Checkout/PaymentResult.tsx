@@ -47,15 +47,12 @@ export default function PaymentResult({ status }: PaymentResultProps) {
                 // Record the payment in the billing table manually (fallback for missing webhooks)
                 const { error: paymentError } = await supabase
                     .from('payments')
-                    .insert({
-                        user_id: user.id,
-                        business_report_id: reportId,
-                        amount: 10000, // $100 ARS (en centavos para que el dashboard muestre $100)
-                        currency: 'ARS',
+                    .update({
                         status: 'succeeded',
-                        payment_provider: 'mercadopago',
                         external_payment_id: paymentId // try to use the MP payment id if available
-                    });
+                    })
+                    .eq('business_report_id', reportId)
+                    .eq('user_id', user.id);
                 if (paymentError) console.log('Payment row might already exist', paymentError);
             }
 
