@@ -30,12 +30,20 @@ Deno.serve(async (req: Request) => {
             global: { headers: { Authorization: authHeader } }
         });
 
-        // Use the passed JWT token
-        const token = authHeader.replace('Bearer ', '');
+        // Use the passed JWT token explicitly
+        const token = authHeader.replace('Bearer ', '').trim();
+
+        if (!token || token === 'undefined' || token === 'null') {
+            return new Response(JSON.stringify({ error: 'Malformed or missing authorization token' }), {
+                status: 401,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+        }
+
         const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
         if (authError || !user) {
-            console.error('Auth Error Payload:', authError);
+            console.error('Auth Error Payload:', authError, 'Token Start:', token.substring(0, 15));
             return new Response(JSON.stringify({ error: 'Unauthorized', details: authError }), {
                 status: 401,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
