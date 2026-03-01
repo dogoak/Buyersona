@@ -4,9 +4,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Language } from '../types';
 import {
     LogOut, User, FileText, Settings, CreditCard, ChevronDown,
-    Globe, BarChart3, Plus
+    Globe, BarChart3, Plus, Shield
 } from 'lucide-react';
 import { Isotype, FullLogo } from './BrandAssets';
+import { supabase } from '../services/supabaseClient';
 
 interface AppHeaderProps {
     lang: Language;
@@ -18,7 +19,21 @@ export default function AppHeader({ lang, setLang }: AppHeaderProps) {
     const navigate = useNavigate();
     const location = useLocation();
     const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const checkAdmin = async () => {
+            if (!user) return;
+            try {
+                const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+                if (data?.role === 'admin') setIsAdmin(true);
+            } catch (err) {
+                console.error(err);
+            }
+        };
+        checkAdmin();
+    }, [user]);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -50,6 +65,10 @@ export default function AppHeader({ lang, setLang }: AppHeaderProps) {
         { label: 'Facturación', icon: CreditCard, path: '/dashboard/billing' },
         { label: 'Configuración', icon: Settings, path: '/dashboard/settings' },
     ];
+
+    if (isAdmin) {
+        menuItems.push({ label: 'Super Admin', icon: Shield, path: '/super-admin' });
+    }
 
     const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
     const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || 'Usuario';

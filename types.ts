@@ -266,4 +266,41 @@ export enum AppState {
 export interface User {
   email: string;
   name?: string;
+  role?: 'user' | 'admin';
+}
+
+// ----------------------------------------------------------------------
+// Admin Dashboard Types
+// ----------------------------------------------------------------------
+
+export interface SystemLog {
+  id: string;
+  user_id?: string;
+  event_type: string;
+  event_data: any;
+  severity: 'info' | 'warning' | 'error' | 'critical';
+  created_at: string;
+}
+
+export interface AdminUserStat {
+  id: string;
+  email: string;
+  full_name: string | null;
+  created_at: string;
+  role: string | null;
+  total_reports: number;
+  total_revenue: number;
+}
+
+export interface AdminDashboardStats {
+  kpis: {
+    total_users: number;
+    total_revenue: number;
+    total_reports: number;
+    paid_reports: number;
+    total_deep_dives: number;
+  };
+  user_stats: AdminUserStat[];
+  recent_logs: SystemLog[];
+  daily_registrations: { date: string; count: number }[];
 }

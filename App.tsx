@@ -16,6 +16,8 @@ import Onboarding from './components/Onboarding';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
 import AppHeader from './components/AppHeader';
+import AdminRoute from './components/AdminRoute';
+import SuperAdminDashboard from './components/SuperAdmin/SuperAdminDashboard';
 import AnalysisLoader from './components/AnalysisLoader';
 import { Language, BusinessInput, StrategicAnalysis } from './types';
 import { analyzeBusinessGrowth } from './services/geminiService';
@@ -237,6 +239,11 @@ function App() {
               <ResumeCheckout />
             </PrivateRoute>
           } />
+
+          {/* Super Admin Routes */}
+          <Route path="/super-admin" element={<AdminRoute />}>
+            <Route index element={<SuperAdminDashboard />} />
+          </Route>
 
           {/* Legal Pages */}
           <Route path="/privacy" element={<PrivacyPolicy />} />
