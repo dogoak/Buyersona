@@ -33,7 +33,6 @@ export default function ReportView({ lang }: ReportViewProps) {
                 .from('business_reports')
                 .select('*')
                 .eq('id', reportId)
-                .eq('user_id', user.id)
                 .single();
 
             if (fetchError) throw fetchError;
