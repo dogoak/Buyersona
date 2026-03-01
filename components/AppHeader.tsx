@@ -145,6 +145,13 @@ export default function AppHeader({ lang, setLang }: AppHeaderProps) {
                                         Cerrar Sesión
                                     </button>
                                 </div>
+
+                                {/* Version Indicator */}
+                                <div className="bg-slate-50 border-t border-slate-100 px-4 py-2">
+                                    <p className="text-[10px] text-slate-400 font-mono text-center">
+                                        v{__APP_VERSION__}
+                                    </p>
+                                </div>
                             </div>
                         )}
                     </div>
