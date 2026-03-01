@@ -3,7 +3,7 @@ import { supabase } from '../../services/supabaseClient';
 import {
     Users, DollarSign, FileText, Activity, AlertCircle,
     CheckCircle, XCircle, Loader2, ArrowLeft, Calendar, Settings,
-    ArrowUpRight, Search, Filter, Download, BarChart3, RefreshCw, Trash2, Cpu
+    ArrowUpRight, Search, Filter, Download, BarChart3, RefreshCw, Trash2, Cpu, Eye, X
 } from 'lucide-react';
 
 const EXCHANGE_RATE_ARS_USD = 1050; // Tipo de cambio quemado para cálculos de rentabilidad
@@ -22,6 +22,7 @@ export default function SuperAdminDashboard() {
     const [priceInput, setPriceInput] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedOnboardingData, setSelectedOnboardingData] = useState<any | null>(null);
 
     // Quick Filters
     const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
@@ -267,8 +268,20 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
                                     ) : (
                                         <p className="text-xs text-slate-400 mt-2">No se guardaron datos de onboarding.</p>
                                     )}
+                                    <div className="flex gap-2 mt-4">
+                                        {r.status === 'completed' && (
+                                            <a href={`/dashboard/report/${r.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-2 rounded-lg hover:bg-indigo-100 transition">
+                                                <ArrowUpRight size={14} /> Ver Reporte
+                                            </a>
+                                        )}
+                                        {r.onboarding_data && (
+                                            <button onClick={() => setSelectedOnboardingData(r.onboarding_data)} className="flex items-center gap-1 text-xs font-bold text-slate-600 bg-slate-100 px-3 py-2 rounded-lg hover:bg-slate-200 transition">
+                                                <Eye size={14} /> Ver Onboarding
+                                            </button>
+                                        )}
+                                    </div>
                                     {(r.api_cost_usd > 0) && (
-                                        <p className="text-xs text-slate-500 mt-2">Costo API estimado: <span className="font-mono text-xs font-bold">${r.api_cost_usd} USD</span></p>
+                                        <p className="text-xs text-slate-500 mt-3">Costo API estimado: <span className="font-mono text-xs font-bold">${r.api_cost_usd} USD</span></p>
                                     )}
                                     {r.error_details && (
                                         <div className="mt-2 text-xs bg-red-50 text-red-700 p-2 rounded border border-red-100 font-mono">
@@ -280,6 +293,29 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
                         </div>
                     )}
                 </div>
+                {/* Modal for Onboarding Data */}
+                {selectedOnboardingData && (
+                    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={(e) => {
+                        if (e.target === e.currentTarget) setSelectedOnboardingData(null);
+                    }}>
+                        <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-scale-up">
+                            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                                <div>
+                                    <h3 className="font-bold text-lg text-slate-900">Datos Completos de Onboarding</h3>
+                                    <p className="text-xs text-slate-500">Respuestas sin procesar enviadas por el usuario</p>
+                                </div>
+                                <button onClick={() => setSelectedOnboardingData(null)} className="text-slate-400 hover:text-slate-600 transition bg-slate-200 hover:bg-slate-300 p-1.5 rounded-full">
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            <div className="p-6 overflow-y-auto bg-slate-900">
+                                <pre className="text-sm font-mono text-emerald-400 whitespace-pre-wrap">
+                                    {JSON.stringify(selectedOnboardingData, null, 2)}
+                                </pre>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
