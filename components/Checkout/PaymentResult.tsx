@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabaseClient';
 import { CheckCircle, XCircle, Clock, Loader2, ArrowRight, RotateCcw } from 'lucide-react';
 
@@ -8,9 +9,11 @@ interface PaymentResultProps {
 }
 
 export default function PaymentResult({ status }: PaymentResultProps) {
+    const { user } = useAuth();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const reportId = searchParams.get('report_id');
+    const paymentId = searchParams.get('payment_id') || `manual_${Date.now()}`;
     const [checking, setChecking] = useState(status === 'success');
 
     // If success, verify payment and trigger analysis
@@ -35,11 +38,25 @@ export default function PaymentResult({ status }: PaymentResultProps) {
 
         if (report?.is_paid || status === 'success') {
             // Mark as paid manually if webhook hasn't fired yet  
-            if (!report?.is_paid) {
+            if (!report?.is_paid && user) {
                 await supabase
                     .from('business_reports')
                     .update({ is_paid: true, payment_status: 'paid' })
                     .eq('id', reportId);
+
+                // Record the payment in the billing table manually (fallback for missing webhooks)
+                const { error: paymentError } = await supabase
+                    .from('payments')
+                    .insert({
+                        user_id: user.id,
+                        business_report_id: reportId,
+                        amount: 500, // 5.00 USD (in cents: 500)
+                        currency: 'USD',
+                        status: 'succeeded',
+                        payment_provider: 'mercadopago',
+                        id: paymentId // try to use the MP payment id if available
+                    });
+                if (paymentError) console.log('Payment row might already exist', paymentError);
             }
 
             setChecking(false);
