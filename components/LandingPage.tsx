@@ -249,8 +249,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
               </div>
               <h3 className="text-xl font-extrabold text-slate-900 mb-2">Product Deep Dive</h3>
               <div className="flex items-baseline justify-center gap-1 my-4">
-                <span className="text-5xl font-extrabold text-slate-900">$5</span>
-                <span className="text-xl font-bold text-slate-400">USD</span>
+                <span className="text-5xl font-extrabold text-slate-900">
+                  {reportPrice ? `$${Math.round(reportPrice / 2).toLocaleString('es-AR')}` : '...'}
+                </span>
+                <span className="text-xl font-bold text-slate-400">ARS</span>
               </div>
               <p className="text-sm text-slate-500 mb-6">
                 {lang === 'es' ? 'Por análisis de producto' : 'Per product analysis'}
