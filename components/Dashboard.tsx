@@ -441,35 +441,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                 </section>
 
                 {/* Operational Reality Check */}
-                <section className={`rounded-3xl p-8 sm:p-10 border shadow-lg relative overflow-hidden ${data.operationalCheck.status === 'Danger' ? 'bg-rose-50/80 border-rose-200' :
-                    data.operationalCheck.status === 'Caution' ? 'bg-amber-50/80 border-amber-200' :
-                        'bg-emerald-50/80 border-emerald-200'
-                    }`}>
-                    <div className="flex flex-col md:flex-row items-start md:items-center gap-8 relative z-10">
-                        <div className={`p-5 rounded-2xl shadow-sm ${data.operationalCheck.status === 'Danger' ? 'bg-white text-rose-600' :
-                            data.operationalCheck.status === 'Caution' ? 'bg-white text-amber-600' :
-                                'bg-white text-emerald-600'
-                            }`}>
-                            {data.operationalCheck.status === 'Danger' ? <ShieldAlert size={40} /> :
-                                data.operationalCheck.status === 'Caution' ? <AlertTriangle size={40} /> :
-                                    <CheckCircle size={40} />}
-                        </div>
-                        <div className="flex-1">
-                            <h3 className={`text-2xl font-black mb-2 ${data.operationalCheck.status === 'Danger' ? 'text-rose-900' :
-                                data.operationalCheck.status === 'Caution' ? 'text-amber-900' :
-                                    'text-emerald-900'
+                {data.operationalCheck && (
+                    <section className={`rounded-3xl p-8 sm:p-10 border shadow-lg relative overflow-hidden ${data.operationalCheck.status === 'Danger' ? 'bg-rose-50/80 border-rose-200' :
+                        data.operationalCheck.status === 'Caution' ? 'bg-amber-50/80 border-amber-200' :
+                            'bg-emerald-50/80 border-emerald-200'
+                        }`}>
+                        <div className="flex flex-col md:flex-row items-start md:items-center gap-8 relative z-10">
+                            <div className={`p-5 rounded-2xl shadow-sm ${data.operationalCheck.status === 'Danger' ? 'bg-white text-rose-600' :
+                                data.operationalCheck.status === 'Caution' ? 'bg-white text-amber-600' :
+                                    'bg-white text-emerald-600'
                                 }`}>
-                                {t.operational_check}: {data.operationalCheck.status}
-                            </h3>
-                            <p className="text-slate-800 font-bold text-lg mb-2">{data.operationalCheck.capacityWarning}</p>
-                            <p className="text-slate-600 font-medium">{data.operationalCheck.advice}</p>
+                                {data.operationalCheck.status === 'Danger' ? <ShieldAlert size={40} /> :
+                                    data.operationalCheck.status === 'Caution' ? <AlertTriangle size={40} /> :
+                                        <CheckCircle size={40} />}
+                            </div>
+                            <div className="flex-1">
+                                <h3 className={`text-2xl font-black mb-2 ${data.operationalCheck.status === 'Danger' ? 'text-rose-900' :
+                                    data.operationalCheck.status === 'Caution' ? 'text-amber-900' :
+                                        'text-emerald-900'
+                                    }`}>
+                                    {t.operational_check}: {data.operationalCheck.status}
+                                </h3>
+                                <p className="text-slate-800 font-bold text-lg mb-2">{data.operationalCheck.capacityWarning}</p>
+                                <p className="text-slate-600 font-medium">{data.operationalCheck.advice}</p>
+                            </div>
+                            <div className="text-center bg-white p-6 rounded-2xl shadow-sm min-w-[160px] w-full md:w-auto">
+                                <span className="block text-4xl font-black text-slate-900 tracking-tighter">{data.operationalCheck.maxLeadsPerMonth}</span>
+                                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">{t.max_leads}</span>
+                            </div>
                         </div>
-                        <div className="text-center bg-white p-6 rounded-2xl shadow-sm min-w-[160px] w-full md:w-auto">
-                            <span className="block text-4xl font-black text-slate-900 tracking-tighter">{data.operationalCheck.maxLeadsPerMonth}</span>
-                            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">{t.max_leads}</span>
-                        </div>
-                    </div>
-                </section>
+                    </section>
+                )}
 
                 {/* Blue Ocean Strategy (NEW) */}
                 {data.blueOcean && (
@@ -516,7 +518,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                                         <h4 className="font-bold text-xs uppercase tracking-widest">Eliminate</h4>
                                     </div>
                                     <ul className="space-y-2">
-                                        {data.blueOcean.errcGrid.eliminate.map((item, i) => (
+                                        {data.blueOcean.errcGrid?.eliminate?.map((item, i) => (
                                             <li key={i} className="text-sm font-medium text-white/90 leading-tight">• {item}</li>
                                         ))}
                                     </ul>
@@ -529,7 +531,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                                         <h4 className="font-bold text-xs uppercase tracking-widest">Raise</h4>
                                     </div>
                                     <ul className="space-y-2">
-                                        {data.blueOcean.errcGrid.raise.map((item, i) => (
+                                        {data.blueOcean.errcGrid?.raise?.map((item, i) => (
                                             <li key={i} className="text-sm font-medium text-white/90 leading-tight">• {item}</li>
                                         ))}
                                     </ul>
@@ -542,7 +544,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                                         <h4 className="font-bold text-xs uppercase tracking-widest">Reduce</h4>
                                     </div>
                                     <ul className="space-y-2">
-                                        {data.blueOcean.errcGrid.reduce.map((item, i) => (
+                                        {data.blueOcean.errcGrid?.reduce?.map((item, i) => (
                                             <li key={i} className="text-sm font-medium text-white/90 leading-tight">• {item}</li>
                                         ))}
                                     </ul>
@@ -555,7 +557,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                                         <h4 className="font-bold text-xs uppercase tracking-widest">Create</h4>
                                     </div>
                                     <ul className="space-y-2">
-                                        {data.blueOcean.errcGrid.create.map((item, i) => (
+                                        {data.blueOcean.errcGrid?.create?.map((item, i) => (
                                             <li key={i} className="text-sm font-medium text-white/90 leading-tight">• {item}</li>
                                         ))}
                                     </ul>

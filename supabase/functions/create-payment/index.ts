@@ -44,7 +44,11 @@ Deno.serve(async (req: Request) => {
 
         if (authError || !user) {
             console.error('Auth Error Payload:', authError, 'Token Start:', token.substring(0, 15));
-            return new Response(JSON.stringify({ error: 'Unauthorized', details: authError }), {
+            return new Response(JSON.stringify({
+                error: 'Unauthorized',
+                details: authError,
+                debug_token_received: token.substring(0, 20) + '...'
+            }), {
                 status: 401,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
