@@ -53,8 +53,8 @@ export default function CheckoutPage({ reportId, businessName, onBack, onSuccess
             }
 
             // Redirect to MercadoPago checkout
-            // Use sandbox_init_point for testing, init_point for production
-            const checkoutUrl = data.sandbox_init_point || data.init_point;
+            // Prioritize init_point (production) over sandbox_init_point
+            const checkoutUrl = data.init_point || data.sandbox_init_point;
             window.location.href = checkoutUrl;
 
         } catch (err: any) {
