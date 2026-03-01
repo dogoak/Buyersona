@@ -69,9 +69,15 @@ export default function CheckoutPage({ reportId, businessName, onBack, onSuccess
                 throw new Error(data.details ? `${data.error}: ${JSON.stringify(data.details)}` : data.error || 'Error al crear el pago');
             }
 
+            // Detect local development environment
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
             // Redirect to MercadoPago checkout
-            // Prioritize init_point (production) over sandbox_init_point
-            const checkoutUrl = data.init_point || data.sandbox_init_point;
+            // Prioritize sandbox_init_point in local development to prevent self-purchase errors
+            const checkoutUrl = isLocal
+                ? (data.sandbox_init_point || data.init_point)
+                : (data.init_point || data.sandbox_init_point);
+
             window.location.href = checkoutUrl;
 
         } catch (err: any) {

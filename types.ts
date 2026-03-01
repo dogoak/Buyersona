@@ -106,6 +106,9 @@ export interface BusinessInput {
   growthGoal: string[];
   growthPace: string;
   additionalNotes?: string;
+
+  // Optional fields for cost tracking
+  websiteAnalysisCostUsd?: number;
 }
 
 export enum PersonaType {

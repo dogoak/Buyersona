@@ -145,12 +145,12 @@ function OnboardingPage({ lang }: { lang: Language }) {
         .eq('id', reportId);
 
       // Run AI analysis
-      const result = await analyzeBusinessGrowth(onboardingData, lang);
+      const { result, costUsd: generationCostUsd } = await analyzeBusinessGrowth(onboardingData, lang);
       setAnalysisResult(result);
 
-      // The analyzeBusinessGrowth function now returns an apiCost field inside its hidden metadata if we want,
-      // or we can hardcode an estimation based on tokens here. For now, we assume Gemini Pro avg cost.
-      const estimatedCost = 0.05;
+      // Evaluate the actual cost (Generation Cost + Initial Website Analysis Cost if applicable)
+      const websiteCostUsd = onboardingData.websiteAnalysisCostUsd || 0;
+      const totalCost = generationCostUsd + websiteCostUsd;
 
       // Save analysis result
       await supabase
@@ -158,7 +158,7 @@ function OnboardingPage({ lang }: { lang: Language }) {
         .update({
           analysis_result: result,
           status: 'completed',
-          api_cost_usd: estimatedCost
+          api_cost_usd: totalCost
         })
         .eq('id', reportId);
 

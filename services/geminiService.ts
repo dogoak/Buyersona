@@ -7,8 +7,11 @@ if (!apiKey) {
 }
 const ai = new GoogleGenAI({ apiKey: apiKey || 'placeholder' });
 
-export const analyzeWebsite = async (url: string, lang: Language): Promise<string> => {
+export const analyzeWebsite = async (url: string, lang: Language): Promise<{ result: string, costUsd: number }> => {
     const modelName = 'gemini-2.5-flash'; // Faster model for initial scrape
+    // Pricing for gemini-2.5-flash (approx): Input = $0.075 / 1M, Output = $0.30 / 1M
+    const inputTokenPriceUsd = 0.075 / 1000000;
+    const outputTokenPriceUsd = 0.30 / 1000000;
     const prompt = lang === 'es'
         ? `Analiza este sitio web: ${url}. Extrae la siguiente información en formato JSON:
            - description: Descripción concisa del negocio.
@@ -38,15 +41,31 @@ export const analyzeWebsite = async (url: string, lang: Language): Promise<strin
         // Manual JSON extraction since we can't enforce MIME type with tools
         const text = response.text || "";
         const jsonMatch = text.match(/\{[\s\S]*\}/);
-        return jsonMatch ? jsonMatch[0] : text;
+        const resultString = jsonMatch ? jsonMatch[0] : text;
+
+        let costUsd = 0;
+        if (response.usageMetadata) {
+            costUsd = (response.usageMetadata.promptTokenCount * inputTokenPriceUsd) +
+                (response.usageMetadata.candidatesTokenCount * outputTokenPriceUsd);
+        } else {
+            // Fallback token estimation (approx 4 chars per token)
+            const estimatedPromptTokens = prompt.length / 4;
+            const estimatedResponseTokens = resultString.length / 4;
+            costUsd = (estimatedPromptTokens * inputTokenPriceUsd) + (estimatedResponseTokens * outputTokenPriceUsd);
+        }
+
+        return { result: resultString, costUsd };
     } catch (e) {
         console.error("Website analysis failed", e);
-        return "";
+        return { result: "", costUsd: 0 };
     }
 };
 
-export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language): Promise<StrategicAnalysis> => {
+export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language): Promise<{ result: StrategicAnalysis, costUsd: number }> => {
     const modelName = 'gemini-3-pro-preview';
+    // Pricing for gemini-3-pro-preview (approx fallback to general Pro prices): Input = $1.25 / 1M, Output = $5.00 / 1M
+    const inputTokenPriceUsd = 1.25 / 1000000;
+    const outputTokenPriceUsd = 5.00 / 1000000;
 
     const languageInstruction = lang === 'es'
         ? "IMPORTANT: The output JSON content MUST be in SPANISH."
@@ -398,7 +417,20 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
     }
 
     try {
-        return JSON.parse(response.text) as StrategicAnalysis;
+        const parsedResult = JSON.parse(response.text) as StrategicAnalysis;
+
+        let costUsd = 0;
+        if (response.usageMetadata) {
+            costUsd = (response.usageMetadata.promptTokenCount * inputTokenPriceUsd) +
+                (response.usageMetadata.candidatesTokenCount * outputTokenPriceUsd);
+        } else {
+            // Fallback token estimation (approx 4 chars per token)
+            const estimatedPromptTokens = JSON.stringify(input).length / 4;
+            const estimatedResponseTokens = response.text ? response.text.length / 4 : 5000;
+            costUsd = (estimatedPromptTokens * inputTokenPriceUsd) + (estimatedResponseTokens * outputTokenPriceUsd);
+        }
+
+        return { result: parsedResult, costUsd };
     } catch (e) {
         console.error("JSON Parse Error", response.text);
         throw new Error("Invalid response format from AI.");

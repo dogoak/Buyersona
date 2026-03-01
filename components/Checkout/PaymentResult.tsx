@@ -37,22 +37,28 @@ export default function PaymentResult({ status }: PaymentResultProps) {
             .single();
 
         if (report?.is_paid || status === 'success') {
-            // Mark as paid manually if webhook hasn't fired yet  
             if (!report?.is_paid && user) {
                 await supabase
                     .from('business_reports')
                     .update({ is_paid: true, payment_status: 'paid' })
                     .eq('id', reportId);
 
-                // Record the payment in the billing table manually (fallback for missing webhooks)
+                // Fetch current price to log it properly if missing
+                const { data: settings } = await supabase.from('system_settings').select('report_price_ars').eq('id', 1).single();
+                const priceArs = settings?.report_price_ars || 5000;
+
+                // Record the payment in the billing table manually using upsert (fallback for missing webhooks in local)
                 const { error: paymentError } = await supabase
                     .from('payments')
-                    .update({
+                    .upsert({
+                        business_report_id: reportId,
+                        user_id: user.id,
                         status: 'succeeded',
-                        external_payment_id: paymentId // try to use the MP payment id if available
-                    })
-                    .eq('business_report_id', reportId)
-                    .eq('user_id', user.id);
+                        amount: priceArs,
+                        external_payment_id: paymentId,
+                        currency: 'ARS'
+                    }, { onConflict: 'external_payment_id' });
+
                 if (paymentError) console.log('Payment row might already exist', paymentError);
             }
 

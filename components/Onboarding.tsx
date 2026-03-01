@@ -310,7 +310,7 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
     }, 15000); // 15 seconds max
 
     try {
-      const jsonString = await analyzeWebsite(formData.websiteUrl, lang);
+      const { result: jsonString, costUsd } = await analyzeWebsite(formData.websiteUrl, lang);
       if (jsonString) {
         try {
           const data = JSON.parse(jsonString);
@@ -321,11 +321,13 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
             targetRegion: data.targetRegion || prev.targetRegion,
             businessType: Array.isArray(data.businessType) ? data.businessType : (data.businessType ? [data.businessType] : prev.businessType),
             distributionModel: data.distributionModel || prev.distributionModel,
-            productTargetScope: data.distributionModel || prev.productTargetScope // Auto-sync scope
+            productTargetScope: data.distributionModel || prev.productTargetScope, // Auto-sync scope
+            websiteAnalysisCostUsd: costUsd
           }));
         } catch (e) {
           // Fallback if not JSON (legacy support)
           updateField('description', jsonString);
+          updateField('websiteAnalysisCostUsd', costUsd);
         }
       }
     } catch (e) {
