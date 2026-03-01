@@ -82,38 +82,28 @@ Deno.serve(async (req: Request) => {
 
         const reportPrice = settings.report_price_ars || 5000;
 
-        // Detect if we are running in local development (Mercado Pago rejects local IPs for webhooks)
-        const isLocalDevelopment = SUPABASE_URL.includes('localhost') || SUPABASE_URL.includes('127.0.0.1');
-
+        // Build preference - only include back_urls if they are real URLs (not localhost)
         const preference: Record<string, unknown> = {
             items: [
                 {
-                    id: String(report_id),
+                    id: report_id,
                     title: `Analisis Estrategico - ${report.business_name || 'Mi Negocio'}`,
                     description: 'Informe estrategico completo con buyer personas, canales de adquisicion, analisis competitivo y plan de accion.',
                     quantity: 1,
                     currency_id: 'ARS',
-                    unit_price: Number(reportPrice),
+                    unit_price: reportPrice,
                 },
             ],
-            payer: {
-                email: user.email,
-            },
-            external_reference: String(report_id),
+            external_reference: report_id,
             metadata: {
-                report_id: String(report_id),
-                user_id: String(user.id),
+                report_id: report_id,
+                user_id: user.id,
             },
+            notification_url: `${SUPABASE_URL}/functions/v1/mp-webhook`,
         };
 
-        // MercadoPago requires notification_url to be publicly reachable HTTPS
-        if (!isLocalDevelopment) {
-            preference.notification_url = `${SUPABASE_URL}/functions/v1/mp-webhook`;
-        }
-
-        // Add back_urls and auto_return (MercadoPago allows localhost for return URLs)
-        // If success_url is provided, we MUST bind back_urls.success
-        if (success_url) {
+        // Only add back_urls and auto_return if URLs are not localhost
+        if (success_url && !success_url.includes('localhost')) {
             preference.back_urls = {
                 success: success_url,
                 failure: failure_url || success_url,

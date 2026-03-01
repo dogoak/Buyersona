@@ -2,11 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../services/supabaseClient';
 import {
     Users, DollarSign, FileText, Activity, AlertCircle,
-    CheckCircle2, XCircle, Loader2, ArrowLeft, Calendar, Settings
+    CheckCircle, XCircle, Loader2, ArrowLeft, Calendar, Settings,
+    ArrowUpRight, Search, Filter, Download, BarChart3, RefreshCw, Trash2, Cpu
 } from 'lucide-react';
 
+const EXCHANGE_RATE_ARS_USD = 1050; // Tipo de cambio quemado para cálculos de rentabilidad
+
 export default function SuperAdminDashboard() {
-    const [loading, setLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(true); // Changed from 'loading' to 'isLoading'
     const [rawProfiles, setRawProfiles] = useState<any[]>([]);
     const [rawReports, setRawReports] = useState<any[]>([]);
     const [rawPayments, setRawPayments] = useState<any[]>([]);
@@ -14,10 +17,11 @@ export default function SuperAdminDashboard() {
     const [rawSettings, setRawSettings] = useState<any>(null);
 
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'logs' | 'settings'>('overview');
+    const [activeTab, setActiveTab] = useState<'kpis' | 'usuarios' | 'logs' | 'settings' | 'pagos'>('kpis'); // Updated activeTab types and initial value
     const [selectedUser, setSelectedUser] = useState<any | null>(null);
     const [priceInput, setPriceInput] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
 
     // Quick Filters
     const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
@@ -27,7 +31,7 @@ export default function SuperAdminDashboard() {
     }, []);
 
     const fetchAllData = async () => {
-        setLoading(true);
+        setIsLoading(true); // Changed from 'setLoading' to 'setIsLoading'
         setErrorMsg(null);
         try {
             // Because of Row Level Security, these requires "Admins can view all" policies
@@ -55,7 +59,7 @@ export default function SuperAdminDashboard() {
             console.error(err);
             setErrorMsg(err.message);
         } finally {
-            setLoading(false);
+            setIsLoading(false); // Changed from 'setLoading' to 'setIsLoading'
         }
     };
 
@@ -109,7 +113,7 @@ export default function SuperAdminDashboard() {
             style: 'currency',
             currency: 'ARS',
             maximumFractionDigits: 0
-        }).format(amount / 100);
+        }).format(amount);
     };
 
     const formatDate = (dateString: string) => {
@@ -119,7 +123,7 @@ export default function SuperAdminDashboard() {
         });
     };
 
-    if (loading) {
+    if (isLoading) { // Changed from 'loading' to 'isLoading'
         return (
             <div className="flex items-center justify-center py-20">
                 <Loader2 className="animate-spin text-indigo-600" size={32} />
@@ -136,9 +140,9 @@ export default function SuperAdminDashboard() {
                 </div>
                 <p className="mb-4">Para poder recolectar toda esta información directamente, debés correr el siguiente código en el <b>SQL Editor</b> de tu panel de Supabase:</p>
                 <div className="bg-slate-900 text-green-400 p-4 rounded-lg font-mono text-xs overflow-x-auto whitespace-pre">
-                    {`CREATE POLICY "Admins can view all reports" ON business_reports FOR SELECT USING (is_admin());
-CREATE POLICY "Admins can view all analyses" ON product_analyses FOR SELECT USING (is_admin());
-CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_admin());`}
+                    {`CREATE POLICY "Admins can view all reports" ON business_reports FOR SELECT USING(is_admin());
+CREATE POLICY "Admins can view all analyses" ON product_analyses FOR SELECT USING(is_admin());
+CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admin()); `}
                 </div>
                 <p className="mt-4 text-sm text-red-700 italic">Error original: {errorMsg}</p>
                 <button
@@ -154,10 +158,35 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_adm
     const { reports, payments, profiles, logs, allUsersAggregated } = filteredData;
 
     const paidReports = reports.filter(r => r.is_paid || r.status === 'completed');
+
+    // Fix: We sum `payments` that are succeeded, we shouldn't use reduce off `reports` for `revenue`. Let's ensure this matches correctly.
     const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
     const prodDeepDives = reports.reduce((sum, r) => sum + (r.product_analyses?.length || 0), 0);
     const conversionRate = reports.length > 0 ? Math.round((paidReports.length / reports.length) * 100) : 0;
+
+    // Fix: Using Number() to safely parse api_cost_usd and ensure we handle 0
     const totalApiCost = reports.reduce((sum, r) => sum + (Number(r.api_cost_usd) || 0), 0);
+
+    // Map Payment History for the Pagos tab
+    const paymentHistory = payments.map(payment => {
+        const report = reports.find(r => r.id === payment.business_report_id);
+        const profile = profiles.find(p => p.id === payment.user_id);
+
+        const apiCostUsd = Number(report?.api_cost_usd) || 0;
+        const apiCostArs = apiCostUsd * EXCHANGE_RATE_ARS_USD;
+        // Rentabilidad: Ingreso - Costo IA convertido
+        const rentabilidadArs = payment.amount - apiCostArs;
+
+        return {
+            ...payment,
+            reportId: report?.id,
+            businessName: report?.business_name || 'Desconocido',
+            userEmail: profile?.email || 'Desconocido',
+            apiCostUsd: apiCostUsd,
+            apiCostArs: apiCostArs,
+            rentabilidadArs: rentabilidadArs
+        };
+    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     const updatePrice = async () => {
         setIsSaving(true);
@@ -287,35 +316,41 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_adm
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-2 p-1 bg-slate-100 rounded-xl w-fit mb-8">
+            <div className="flex flex-wrap gap-2 p-1 bg-slate-100 rounded-xl w-fit mb-8">
                 <button
-                    onClick={() => setActiveTab('overview')}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${activeTab === 'overview' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    onClick={() => setActiveTab('kpis')}
+                    className={`px - 4 py - 2 rounded - lg text - sm font - semibold transition ${activeTab === 'kpis' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'} `}
                 >
                     Métricas
                 </button>
                 <button
-                    onClick={() => setActiveTab('users')}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${activeTab === 'users' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    onClick={() => setActiveTab('usuarios')}
+                    className={`px - 4 py - 2 rounded - lg text - sm font - semibold transition ${activeTab === 'usuarios' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'} `}
                 >
                     Usuarios & Actividad
                 </button>
                 <button
+                    onClick={() => setActiveTab('pagos')}
+                    className={`px - 4 py - 2 rounded - lg text - sm font - semibold transition ${activeTab === 'pagos' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'} `}
+                >
+                    Historial de Pagos
+                </button>
+                <button
                     onClick={() => setActiveTab('logs')}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${activeTab === 'logs' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`px - 4 py - 2 rounded - lg text - sm font - semibold transition ${activeTab === 'logs' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'} `}
                 >
                     Log de Errores ({logs.filter(l => l.severity === 'error').length})
                 </button>
                 <button
                     onClick={() => setActiveTab('settings')}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1 ${activeTab === 'settings' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`px - 4 py - 2 rounded - lg text - sm font - semibold transition flex items - center gap - 1 ${activeTab === 'settings' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'} `}
                 >
                     <Settings size={16} /> Configuración
                 </button>
             </div>
 
             {/* METRICS TAB */}
-            {activeTab === 'overview' && (
+            {activeTab === 'kpis' && (
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
@@ -353,7 +388,7 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_adm
             )}
 
             {/* USERS TAB */}
-            {activeTab === 'users' && (
+            {activeTab === 'usuarios' && (
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                     <div className="p-4 border-b border-slate-100 bg-slate-50/50">
                         <p className="text-sm font-medium text-slate-600">Hacé clic en cualquier usuario para ver el detalle exacto de su recorrido y reportes.</p>
@@ -363,7 +398,7 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_adm
                             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase font-bold tracking-wider">
                                 <tr>
                                     <th className="px-6 py-4">Usuario</th>
-                                    <th className="px-6 py-4">Ingreso</th>
+                                    <th className="px-6 py-4">Fecha Alta</th>
                                     <th className="px-6 py-4 text-center">Status Onboarding</th>
                                     <th className="px-6 py-4 text-center">Reportes Pagos</th>
                                     <th className="px-6 py-4 text-right">LTV (Ingresos)</th>
@@ -404,12 +439,58 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_adm
                 </div>
             )}
 
+            {/* PAGOS TAB */}
+            {activeTab === 'pagos' && (
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                    <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <p className="text-sm font-medium text-slate-600">Historial detallado de reportes pagados y su rentabilidad contra el costo de IA.</p>
+                            <p className="text-xs text-slate-400 mt-1">Tasa de cambio actual utilizada para rentabilidad: <strong>1 USD = {EXCHANGE_RATE_ARS_USD} ARS</strong></p>
+                        </div>
+                    </div>
+
+                    {paymentHistory.length === 0 ? (
+                        <div className="p-12 text-center text-slate-500">
+                            <CheckCircle size={32} className="mx-auto text-emerald-400 mb-3" />
+                            <p>Aún no hay compras completadas en este período.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase font-bold tracking-wider">
+                                    <tr>
+                                        <th className="px-6 py-4">Fecha</th>
+                                        <th className="px-6 py-4">Usuario</th>
+                                        <th className="px-6 py-4">Proyecto (Informe)</th>
+                                        <th className="px-6 py-4 text-right">Ingreso Neto (ARS)</th>
+                                        <th className="px-6 py-4 text-right">Costo IA (USD)</th>
+                                        <th className="px-6 py-4 text-right">Rentabilidad (ARS)</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {paymentHistory.map((payment) => (
+                                        <tr key={payment.id} className="hover:bg-slate-50 transition">
+                                            <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">{formatDate(payment.created_at)}</td>
+                                            <td className="px-6 py-4 text-sm text-slate-900 font-medium">{payment.userEmail}</td>
+                                            <td className="px-6 py-4 text-sm text-slate-600">{payment.businessName}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-emerald-600 text-right">{formatCurrency(payment.amount)}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-red-500 text-right">${payment.apiCostUsd.toFixed(4)}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-indigo-600 text-right">{formatCurrency(payment.rentabilidadArs)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* LOGS TAB */}
             {activeTab === 'logs' && (
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                     {logs.length === 0 ? (
                         <div className="p-12 text-center text-slate-500">
-                            <CheckCircle2 size={32} className="mx-auto text-emerald-400 mb-3" />
+                            <CheckCircle size={32} className="mx-auto text-emerald-400 mb-3" />
                             <p>No hay logs ni errores en este período.</p>
                         </div>
                     ) : (
@@ -432,7 +513,7 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_adm
                                                 ) : log.severity === 'warning' ? (
                                                     <AlertCircle size={18} className="text-amber-500" />
                                                 ) : (
-                                                    <CheckCircle2 size={18} className="text-emerald-500" />
+                                                    <CheckCircle size={18} className="text-emerald-500" />
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">{formatDate(log.created_at)}</td>
@@ -476,7 +557,7 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_adm
                         disabled={isSaving || priceInput === rawSettings?.report_price_ars?.toString()}
                         className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold px-8 py-3 rounded-xl transition flex items-center gap-2"
                     >
-                        {isSaving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                        {isSaving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
                         Guardar Cambios
                     </button>
                 </div>
