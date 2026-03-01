@@ -18,6 +18,9 @@ import {
 interface OnboardingProps {
   lang: Language;
   onComplete: (data: BusinessInput) => void;
+  onStepChange?: (step: number, data: BusinessInput) => void;
+  initialStep?: number;
+  initialData?: BusinessInput;
 }
 
 const TOTAL_STEPS = 7;
@@ -193,13 +196,13 @@ const CardOption: React.FC<CardOptionProps> = ({
   </div>
 );
 
-export default function Onboarding({ lang, onComplete }: OnboardingProps) {
+export default function Onboarding({ lang, onComplete, onStepChange, initialStep = 0, initialData }: OnboardingProps) {
   const { user } = useAuth();
   const t = translations[lang].onboarding;
 
-  const [currentStep, setCurrentStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState(initialStep);
   const [isAnalyzingUrl, setIsAnalyzingUrl] = useState(false);
-  const [formData, setFormData] = useState<BusinessInput>({
+  const [formData, setFormData] = useState<BusinessInput>(initialData || {
     // Identity & Context
     businessName: '',
     businessStage: 'startup', // Default
@@ -388,43 +391,37 @@ export default function Onboarding({ lang, onComplete }: OnboardingProps) {
   };
 
   const next = async () => {
+    let newStepsData = { ...formData };
     if (currentStep === 3) {
       if (formData.exploreSecondaryMarket) {
         const secondary = formData.productTargetScope === 'b2b' ? 'b2c' : 'b2b';
+        newStepsData.secondaryMarketType = secondary;
         updateField('secondaryMarketType', secondary);
       } else {
+        newStepsData.secondaryMarketType = undefined;
+        newStepsData.supportReadiness = undefined;
         updateField('secondaryMarketType', undefined);
         updateField('supportReadiness', undefined);
       }
     }
+
     if (currentStep < TOTAL_STEPS - 1) {
-      setCurrentStep(c => c + 1);
+      const nextStep = currentStep + 1;
+      setCurrentStep(nextStep);
       window.scrollTo(0, 0);
+      if (onStepChange) onStepChange(nextStep, newStepsData);
     } else {
       // Final step completed
-      if (user) {
-        try {
-          const { error } = await supabase
-            .from('reports')
-            .insert([
-              {
-                user_id: user.id,
-                company_name: formData.businessName,
-                data: formData,
-                status: 'draft'
-              }
-            ]);
-          if (error) console.error('Error saving draft report:', error);
-        } catch (err) {
-          console.error('Error saving to Supabase:', err);
-        }
-      }
-      onComplete(formData);
+      onComplete(newStepsData);
     }
   };
 
   const back = () => {
-    if (currentStep > 0) setCurrentStep(c => c - 1);
+    if (currentStep > 0) {
+      const prevStep = currentStep - 1;
+      setCurrentStep(prevStep);
+      if (onStepChange) onStepChange(prevStep, formData);
+    }
   };
 
   const renderStep = () => {
@@ -1570,7 +1567,11 @@ export default function Onboarding({ lang, onComplete }: OnboardingProps) {
           {/* Dev Skip Button */}
           <button
             onClick={() => {
-              if (currentStep < TOTAL_STEPS - 1) setCurrentStep(c => c + 1);
+              if (currentStep < TOTAL_STEPS - 1) {
+                const nextStep = currentStep + 1;
+                setCurrentStep(nextStep);
+                if (onStepChange) onStepChange(nextStep, formData);
+              }
               else onComplete(formData);
             }}
             className="absolute left-1/2 transform -translate-x-1/2 text-xs text-slate-300 hover:text-indigo-400 font-mono border border-slate-200 px-2 py-1 rounded bg-slate-50"

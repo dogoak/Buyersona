@@ -5,6 +5,8 @@ import { ArrowRight, Globe, Target, MapPin, BarChart3, TrendingUp, Clock, Waves,
 
 import { FullLogo, Isotype } from './BrandAssets';
 
+import { supabase } from '../services/supabaseClient';
+
 interface LandingPageProps {
   lang: Language;
   setLang: (l: Language) => void;
@@ -14,6 +16,23 @@ interface LandingPageProps {
 
 export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin, onRegister }) => {
   const t = translations[lang].hero;
+  const [reportPrice, setReportPrice] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    const fetchPrice = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('system_settings')
+          .select('report_price_ars')
+          .eq('id', 1)
+          .single();
+        if (data && !error) setReportPrice(data.report_price_ars);
+      } catch (err) {
+        console.error('Failed to fetch pricing:', err);
+      }
+    };
+    fetchPrice();
+  }, []);
 
   return (
     <div className="min-h-screen relative overflow-hidden font-sans">
@@ -189,8 +208,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
                 {lang === 'es' ? 'Análisis Estratégico' : 'Strategic Analysis'}
               </h3>
               <div className="flex items-baseline justify-center gap-1 my-4">
-                <span className="text-5xl font-extrabold text-slate-900">$5</span>
-                <span className="text-xl font-bold text-slate-400">USD</span>
+                <span className="text-5xl font-extrabold text-slate-900">
+                  {reportPrice ? `$${(reportPrice).toLocaleString('es-AR')}` : '...'}
+                </span>
+                <span className="text-xl font-bold text-slate-400">ARS</span>
               </div>
               <p className="text-sm text-slate-500 mb-6">
                 {lang === 'es' ? 'Pago único por informe' : 'One-time payment per report'}

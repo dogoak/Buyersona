@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../services/supabaseClient';
 import {
     Users, DollarSign, FileText, Activity, AlertCircle,
-    CheckCircle2, XCircle, Loader2, ArrowLeft, Calendar
+    CheckCircle2, XCircle, Loader2, ArrowLeft, Calendar, Settings
 } from 'lucide-react';
 
 export default function SuperAdminDashboard() {
@@ -11,10 +11,13 @@ export default function SuperAdminDashboard() {
     const [rawReports, setRawReports] = useState<any[]>([]);
     const [rawPayments, setRawPayments] = useState<any[]>([]);
     const [rawLogs, setRawLogs] = useState<any[]>([]);
+    const [rawSettings, setRawSettings] = useState<any>(null);
 
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'logs'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'logs' | 'settings'>('overview');
     const [selectedUser, setSelectedUser] = useState<any | null>(null);
+    const [priceInput, setPriceInput] = useState<string>('');
+    const [isSaving, setIsSaving] = useState(false);
 
     // Quick Filters
     const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
@@ -28,11 +31,12 @@ export default function SuperAdminDashboard() {
         setErrorMsg(null);
         try {
             // Because of Row Level Security, these requires "Admins can view all" policies
-            const [profilesRes, reportsRes, paymentsRes, logsRes] = await Promise.all([
+            const [profilesRes, reportsRes, paymentsRes, logsRes, settingsRes] = await Promise.all([
                 supabase.from('profiles').select('*'),
                 supabase.from('business_reports').select('*, product_analyses(*)'),
                 supabase.from('payments').select('*'),
-                supabase.from('system_logs').select('*').order('created_at', { ascending: false })
+                supabase.from('system_logs').select('*').order('created_at', { ascending: false }),
+                supabase.from('system_settings').select('*').eq('id', 1).single()
             ]);
 
             if (profilesRes.error) throw new Error("Fallo al cargar usuarios: " + profilesRes.error.message);
@@ -44,6 +48,8 @@ export default function SuperAdminDashboard() {
             setRawReports(reportsRes.data || []);
             setRawPayments(paymentsRes.data || []);
             setRawLogs(logsRes.data || []);
+            setRawSettings(settingsRes.data || null);
+            if (settingsRes.data?.report_price_ars) setPriceInput(settingsRes.data.report_price_ars.toString());
 
         } catch (err: any) {
             console.error(err);
@@ -151,6 +157,21 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_adm
     const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
     const prodDeepDives = reports.reduce((sum, r) => sum + (r.product_analyses?.length || 0), 0);
     const conversionRate = reports.length > 0 ? Math.round((paidReports.length / reports.length) * 100) : 0;
+    const totalApiCost = reports.reduce((sum, r) => sum + (Number(r.api_cost_usd) || 0), 0);
+
+    const updatePrice = async () => {
+        setIsSaving(true);
+        try {
+            const { error } = await supabase.from('system_settings').update({ report_price_ars: parseInt(priceInput) }).eq('id', 1);
+            if (error) throw error;
+            alert('Precio actualizado correctamente. Impacta en Landing Page y MercadoPago en tiempo real.');
+            fetchAllData();
+        } catch (e: any) {
+            alert('Error al guardar el precio: ' + e.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     // USER DETAIL VIEW
     if (selectedUser) {
@@ -203,8 +224,8 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_adm
                                             <p className="text-xs text-slate-500">{formatDate(r.created_at)}</p>
                                         </div>
                                         <div>
-                                            {r.status === 'draft' && <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-bold">ABANDONÓ ONBOARDING (DRAFT)</span>}
-                                            {r.status === 'completed' && <span className="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded font-bold">PAGADO & ANALIZADO</span>}
+                                            {r.status === 'draft' && <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-bold">ABANDONÓ ONBOARDING (PASO {r.current_step || 1})</span>}
+                                            {r.status === 'completed' && <span className="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded font-bold">COMPLETADO {r.is_paid ? '(PAGO)' : '(GRATIS/ADMIN)'}</span>}
                                             {r.status === 'failed' && <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold">FALLÓ IA</span>}
                                             {r.status === 'analyzing' && <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold">ANALIZANDO</span>}
                                         </div>
@@ -216,6 +237,14 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_adm
                                         </div>
                                     ) : (
                                         <p className="text-xs text-slate-400 mt-2">No se guardaron datos de onboarding.</p>
+                                    )}
+                                    {(r.api_cost_usd > 0) && (
+                                        <p className="text-xs text-slate-500 mt-2">Costo API estimado: <span className="font-mono text-xs font-bold">${r.api_cost_usd} USD</span></p>
+                                    )}
+                                    {r.error_details && (
+                                        <div className="mt-2 text-xs bg-red-50 text-red-700 p-2 rounded border border-red-100 font-mono">
+                                            Razón del fallo: {r.error_details}
+                                        </div>
                                     )}
                                 </div>
                             ))}
@@ -277,6 +306,12 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_adm
                 >
                     Log de Errores ({logs.filter(l => l.severity === 'error').length})
                 </button>
+                <button
+                    onClick={() => setActiveTab('settings')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1 ${activeTab === 'settings' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    <Settings size={16} /> Configuración
+                </button>
             </div>
 
             {/* METRICS TAB */}
@@ -302,6 +337,11 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_adm
                             <h3 className="text-slate-500 text-sm font-bold mb-1 uppercase">Conversión a Venta</h3>
                             <p className="text-3xl font-bold text-indigo-600">{conversionRate}%</p>
                             <p className="text-xs text-slate-400 mt-2">Visita dashboard vs Pagó</p>
+                        </div>
+                        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                            <h3 className="text-slate-500 text-sm font-bold mb-1 uppercase">Costo IA Total</h3>
+                            <p className="text-3xl font-bold text-rose-600">${totalApiCost.toFixed(3)}</p>
+                            <p className="text-xs text-slate-400 mt-2">Consumido en USD en Gemini</p>
                         </div>
                         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
                             <h3 className="text-slate-500 text-sm font-bold mb-1 uppercase">Deep Dives (Extras)</h3>
@@ -406,6 +446,39 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_adm
                             </table>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* SETTINGS TAB */}
+            {activeTab === 'settings' && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm max-w-xl">
+                    <h2 className="text-xl font-bold text-slate-900 mb-4">Configuración Global de la Plataforma</h2>
+                    <p className="text-slate-500 mb-8 text-sm">Cambiar estos valores impactará a los usuarios finales de forma inmediata en la Landing Page y en el Checkout de MercadoPago.</p>
+
+                    <div className="mb-6">
+                        <label className="block text-sm font-bold text-slate-700 mb-2">Precio del Informe (ARS)</label>
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <DollarSign size={16} className="text-slate-400" />
+                            </div>
+                            <input
+                                type="number"
+                                value={priceInput}
+                                onChange={(e) => setPriceInput(e.target.value)}
+                                className="pl-10 w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-indigo-500 outline-none text-slate-900 font-bold"
+                            />
+                        </div>
+                        <p className="text-xs text-slate-400 mt-2">Este monto será cobrado por Mercado Pago en pesos argentinos.</p>
+                    </div>
+
+                    <button
+                        onClick={updatePrice}
+                        disabled={isSaving || priceInput === rawSettings?.report_price_ars?.toString()}
+                        className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold px-8 py-3 rounded-xl transition flex items-center gap-2"
+                    >
+                        {isSaving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                        Guardar Cambios
+                    </button>
                 </div>
             )}
         </div>

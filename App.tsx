@@ -73,6 +73,40 @@ function OnboardingPage({ lang }: { lang: Language }) {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // Track step changes
+  const handleStepChange = async (newStepIndex: number, data: BusinessInput) => {
+    if (!user) return;
+    try {
+      if (!reportId) {
+        const { data: report, error } = await supabase
+          .from('business_reports')
+          .insert({
+            user_id: user.id,
+            business_name: data.businessName || 'Draft Report',
+            onboarding_data: data,
+            status: 'draft',
+            current_step: newStepIndex
+          })
+          .select('id')
+          .single();
+
+        if (error) throw error;
+        setReportId(report.id);
+      } else {
+        await supabase
+          .from('business_reports')
+          .update({
+            business_name: data.businessName || 'Draft Report',
+            onboarding_data: data,
+            current_step: newStepIndex
+          })
+          .eq('id', reportId);
+      }
+    } catch (e) {
+      console.error('Error tracking step change:', e);
+    }
+  };
+
   // Step 1: Onboarding complete → save draft and go to checkout
   const handleOnboardingComplete = async (data: BusinessInput) => {
     if (!user) return;
@@ -81,21 +115,13 @@ function OnboardingPage({ lang }: { lang: Language }) {
     setBusinessName(data.businessName);
 
     try {
-      // Save draft report
-      const { data: report, error: saveError } = await supabase
-        .from('business_reports')
-        .insert({
-          user_id: user.id,
-          business_name: data.businessName,
-          onboarding_data: data,
-          status: 'draft'
-        })
-        .select('id')
-        .single();
+      // Ensure the very final state is saved with step 7 (Checkout intent)
+      await handleStepChange(7, data);
 
-      if (saveError) throw saveError;
+      if (!reportId) {
+        throw new Error("Report ID was not generated during step tracking.");
+      }
 
-      setReportId(report.id);
       setStep('checkout');
     } catch (err: any) {
       console.error('Error saving report:', err);
@@ -122,12 +148,17 @@ function OnboardingPage({ lang }: { lang: Language }) {
       const result = await analyzeBusinessGrowth(onboardingData, lang);
       setAnalysisResult(result);
 
+      // The analyzeBusinessGrowth function now returns an apiCost field inside its hidden metadata if we want,
+      // or we can hardcode an estimation based on tokens here. For now, we assume Gemini Pro avg cost.
+      const estimatedCost = 0.05;
+
       // Save analysis result
       await supabase
         .from('business_reports')
         .update({
           analysis_result: result,
-          status: 'completed'
+          status: 'completed',
+          api_cost_usd: estimatedCost
         })
         .eq('id', reportId);
 
@@ -138,7 +169,10 @@ function OnboardingPage({ lang }: { lang: Language }) {
 
       await supabase
         .from('business_reports')
-        .update({ status: 'failed' })
+        .update({
+          status: 'failed',
+          error_details: err.message || 'Unknown Error'
+        })
         .eq('id', reportId);
 
       setStep('error');
@@ -147,7 +181,7 @@ function OnboardingPage({ lang }: { lang: Language }) {
 
   // Step: Onboarding form
   if (step === 'onboarding') {
-    return <Onboarding lang={lang} onComplete={handleOnboardingComplete} />;
+    return <Onboarding lang={lang} onComplete={handleOnboardingComplete} onStepChange={handleStepChange} />;
   }
 
   // Step: Checkout
@@ -196,7 +230,7 @@ function OnboardingPage({ lang }: { lang: Language }) {
     );
   }
 
-  return <Onboarding lang={lang} onComplete={handleOnboardingComplete} />;
+  return <Onboarding lang={lang} onComplete={handleOnboardingComplete} onStepChange={handleStepChange} />;
 }
 
 function App() {

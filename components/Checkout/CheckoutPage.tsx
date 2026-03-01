@@ -17,6 +17,23 @@ export default function CheckoutPage({ reportId, businessName, onBack, onSuccess
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [reportPrice, setReportPrice] = useState<number | null>(null);
+
+    React.useEffect(() => {
+        const fetchPrice = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('system_settings')
+                    .select('report_price_ars')
+                    .eq('id', 1)
+                    .single();
+                if (data && !error) setReportPrice(data.report_price_ars);
+            } catch (err) {
+                console.error('Failed to fetch pricing:', err);
+            }
+        };
+        fetchPrice();
+    }, []);
 
     const handlePayment = async () => {
         if (!user) return;
@@ -117,8 +134,10 @@ export default function CheckoutPage({ reportId, businessName, onBack, onSuccess
                         {/* Price */}
                         <div className="bg-gradient-to-r from-indigo-50 to-violet-50 rounded-2xl p-6 text-center mb-6 border border-indigo-100">
                             <div className="flex items-baseline justify-center gap-1 mb-1">
-                                <span className="text-4xl font-extrabold text-slate-900">$5</span>
-                                <span className="text-lg font-bold text-slate-500">USD</span>
+                                <span className="text-4xl font-extrabold text-slate-900">
+                                    {reportPrice ? `$${reportPrice.toLocaleString('es-AR')}` : '...'}
+                                </span>
+                                <span className="text-lg font-bold text-slate-500">ARS</span>
                             </div>
                             <p className="text-sm text-slate-500">Pago único · Sin suscripción</p>
                         </div>
