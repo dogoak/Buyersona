@@ -166,9 +166,9 @@ const PersonaDetailCard = ({ persona, lang }: { persona: Persona, lang: Language
                                 <h4 className="font-bold text-sm uppercase">{t.p_demographic}</h4>
                             </div>
                             <div className="space-y-3 text-sm">
-                                <div><span className="text-slate-400 font-semibold text-xs uppercase block">{t.lbl_role}</span> <span className="font-medium text-slate-800">{persona.demographic.role}</span></div>
-                                <div><span className="text-slate-400 font-semibold text-xs uppercase block">{t.lbl_industry}</span> <span className="font-medium text-slate-800">{persona.demographic.industry} ({persona.demographic.marketType})</span></div>
-                                <div><span className="text-slate-400 font-semibold text-xs uppercase block">Company</span> <span className="font-medium text-slate-800">{persona.demographic.companyType} ({persona.demographic.companySize})</span></div>
+                                <div><span className="text-slate-400 font-semibold text-xs uppercase block">{t.lbl_role}</span> <span className="font-medium text-slate-800">{persona.demographic?.role || 'N/A'}</span></div>
+                                <div><span className="text-slate-400 font-semibold text-xs uppercase block">{t.lbl_industry}</span> <span className="font-medium text-slate-800">{persona.demographic?.industry || 'N/A'} ({persona.demographic?.marketType || 'N/A'})</span></div>
+                                <div><span className="text-slate-400 font-semibold text-xs uppercase block">Company</span> <span className="font-medium text-slate-800">{persona.demographic?.companyType || 'N/A'} ({persona.demographic?.companySize || 'N/A'})</span></div>
                             </div>
                         </div>
 
@@ -295,40 +295,42 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-12">
 
                 {/* Market Pulse (NEW) */}
-                <section className="bg-slate-900 rounded-[2rem] p-6 sm:p-8 text-white shadow-2xl overflow-hidden relative">
-                    <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500 rounded-full mix-blend-screen filter blur-[100px] opacity-20"></div>
+                {data.marketInsights && (
+                    <section className="bg-slate-900 rounded-[2rem] p-6 sm:p-8 text-white shadow-2xl overflow-hidden relative">
+                        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500 rounded-full mix-blend-screen filter blur-[100px] opacity-20"></div>
 
-                    <div className="flex items-center mb-6 relative z-10">
-                        <div className="p-2 bg-indigo-500/20 rounded-lg mr-3">
-                            <BarChart size={20} className="text-indigo-400" />
-                        </div>
-                        <h2 className="text-lg font-bold tracking-tight">{t.market_pulse}: <span className="text-indigo-400">{data.marketInsights.industry}</span></h2>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10">
-                        {/* Benchmarks */}
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Target CAC</p>
-                            <p className="text-2xl font-bold text-emerald-400">{data.marketInsights.benchmarkCAC}</p>
-                        </div>
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Conv. Rate</p>
-                            <p className="text-2xl font-bold text-blue-400">{data.marketInsights.benchmarkConversion}</p>
-                        </div>
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Sales Cycle</p>
-                            <p className="text-2xl font-bold text-indigo-400">{data.marketInsights.typicalSalesCycle}</p>
+                        <div className="flex items-center mb-6 relative z-10">
+                            <div className="p-2 bg-indigo-500/20 rounded-lg mr-3">
+                                <BarChart size={20} className="text-indigo-400" />
+                            </div>
+                            <h2 className="text-lg font-bold tracking-tight">{t.market_pulse}: <span className="text-indigo-400">{data.marketInsights.industry}</span></h2>
                         </div>
 
-                        {/* Trends */}
-                        <div className="md:col-span-1 bg-gradient-to-br from-indigo-600 to-violet-700 p-4 rounded-xl border border-white/10 flex flex-col justify-center">
-                            <p className="text-xs text-indigo-200 uppercase font-bold tracking-wider mb-2">{t.market_trends}</p>
-                            <div className="text-sm font-medium leading-snug">
-                                {data.marketInsights.trends[0]}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10">
+                            {/* Benchmarks */}
+                            <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Target CAC</p>
+                                <p className="text-2xl font-bold text-emerald-400">{data.marketInsights.benchmarkCAC}</p>
+                            </div>
+                            <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Conv. Rate</p>
+                                <p className="text-2xl font-bold text-blue-400">{data.marketInsights.benchmarkConversion}</p>
+                            </div>
+                            <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Sales Cycle</p>
+                                <p className="text-2xl font-bold text-indigo-400">{data.marketInsights.typicalSalesCycle}</p>
+                            </div>
+
+                            {/* Trends */}
+                            <div className="md:col-span-1 bg-gradient-to-br from-indigo-600 to-violet-700 p-4 rounded-xl border border-white/10 flex flex-col justify-center">
+                                <p className="text-xs text-indigo-200 uppercase font-bold tracking-wider mb-2">{t.market_trends}</p>
+                                <div className="text-sm font-medium leading-snug">
+                                    {data.marketInsights.trends[0]}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
+                )}
 
                 {/* Executive Summary */}
                 <section className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-white/60 p-8 sm:p-10 relative overflow-hidden group">
@@ -429,7 +431,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                     <div className="grid grid-cols-1 gap-8">
                         {/* Persona Cards - NOW WITH DEEP PROFILE DETAILS */}
                         <div className="flex flex-col gap-6">
-                            {data.demandMap.map((persona, idx) => (
+                            {data.demandMap?.map((persona, idx) => (
                                 <React.Fragment key={idx}>
                                     <PersonaDetailCard persona={persona} lang={lang} />
                                 </React.Fragment>
@@ -626,7 +628,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                     </div>
 
                     <div className="space-y-6 relative z-10">
-                        {data.actionPlan.map((step, idx) => (
+                        {data.actionPlan?.map((step, idx) => (
                             <div key={idx} className="flex gap-6 group">
                                 <div className="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-lg shadow-lg shadow-indigo-900/50 group-hover:scale-110 transition-transform">
                                     {idx + 1}
