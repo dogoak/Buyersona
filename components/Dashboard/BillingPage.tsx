@@ -11,6 +11,9 @@ interface Payment {
     payment_provider: string;
     created_at: string;
     business_report_id: string;
+    business_reports?: {
+        business_name: string;
+    };
 }
 
 export default function BillingPage() {
@@ -27,7 +30,7 @@ export default function BillingPage() {
         try {
             const { data, error } = await supabase
                 .from('payments')
-                .select('*')
+                .select('*, business_reports(business_name)')
                 .eq('user_id', user.id)
                 .order('created_at', { ascending: false });
 
@@ -135,7 +138,14 @@ export default function BillingPage() {
                             {payments.map((payment) => (
                                 <tr key={payment.id} className="hover:bg-slate-50 transition">
                                     <td className="px-6 py-4 text-sm text-slate-600">{formatDate(payment.created_at)}</td>
-                                    <td className="px-6 py-4 text-sm text-slate-900 font-medium">Análisis Estratégico</td>
+                                    <td className="px-6 py-4 text-sm text-slate-900 font-medium whitespace-nowrap">
+                                        Análisis Estratégico
+                                        {payment.business_reports?.business_name && (
+                                            <span className="text-slate-500 font-normal ml-1">
+                                                - {payment.business_reports.business_name}
+                                            </span>
+                                        )}
+                                    </td>
                                     <td className="px-6 py-4 text-sm font-bold text-slate-900">{formatAmount(payment.amount, payment.currency)}</td>
                                     <td className="px-6 py-4">{getStatusBadge(payment.status)}</td>
                                     <td className="px-6 py-4 text-sm text-slate-500 capitalize">{payment.payment_provider}</td>
