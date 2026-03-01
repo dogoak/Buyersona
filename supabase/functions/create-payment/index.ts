@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const MP_ACCESS_TOKEN = Deno.env.get('MP_ACCESS_TOKEN')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -25,12 +25,18 @@ Deno.serve(async (req: Request) => {
             });
         }
 
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        // Initialize user-level client with Anon Key and user's JWT
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            global: { headers: { Authorization: authHeader } }
+        });
+
+        // Use the passed JWT token
         const token = authHeader.replace('Bearer ', '');
         const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
         if (authError || !user) {
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            console.error('Auth Error Payload:', authError);
+            return new Response(JSON.stringify({ error: 'Unauthorized', details: authError }), {
                 status: 401,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
