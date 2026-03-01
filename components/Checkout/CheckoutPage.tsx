@@ -45,6 +45,10 @@ export default function CheckoutPage({ reportId, businessName, onBack, onSuccess
             const session = await supabase.auth.getSession();
             const token = session.data.session?.access_token;
 
+            if (!token) {
+                throw new Error("Su sesión de pago ha expirado o es inválida. Por favor recargue la página o vuelva a ingresar.");
+            }
+
             const response = await fetch(
                 `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment`,
                 {
