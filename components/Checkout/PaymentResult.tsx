@@ -50,11 +50,11 @@ export default function PaymentResult({ status }: PaymentResultProps) {
                     .insert({
                         user_id: user.id,
                         business_report_id: reportId,
-                        amount: 500, // 5.00 USD (in cents: 500)
-                        currency: 'USD',
+                        amount: 10000, // $100 ARS (en centavos para que el dashboard muestre $100)
+                        currency: 'ARS',
                         status: 'succeeded',
                         payment_provider: 'mercadopago',
-                        id: paymentId // try to use the MP payment id if available
+                        external_payment_id: paymentId // try to use the MP payment id if available
                     });
                 if (paymentError) console.log('Payment row might already exist', paymentError);
             }
