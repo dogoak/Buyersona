@@ -20,11 +20,6 @@ export default function AppHeader({ lang, setLang }: AppHeaderProps) {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Don't show on landing page (it has its own navbar)
-    if (location.pathname === '/') return null;
-    // Don't show on login page
-    if (location.pathname === '/login') return null;
-
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -34,6 +29,11 @@ export default function AppHeader({ lang, setLang }: AppHeaderProps) {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    // Don't show on landing page (it has its own navbar)
+    if (location.pathname === '/') return null;
+    // Don't show on login page
+    if (location.pathname === '/login') return null;
 
     const handleSignOut = async () => {
         try {
@@ -124,8 +124,8 @@ export default function AppHeader({ lang, setLang }: AppHeaderProps) {
                                                     setDropdownOpen(false);
                                                 }}
                                                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
-                                                        ? 'bg-indigo-50 text-indigo-700 font-medium'
-                                                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                    ? 'bg-indigo-50 text-indigo-700 font-medium'
+                                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                                                     }`}
                                             >
                                                 <Icon size={16} />
