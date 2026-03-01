@@ -165,7 +165,7 @@ export default function ReportView({ lang }: ReportViewProps) {
                 </div>
 
                 <Dashboard
-                    data={report.analysis_result as StrategicAnalysis}
+                    data={((report.analysis_result as any)?.result || report.analysis_result) as StrategicAnalysis}
                     lang={lang}
                     onReset={() => navigate('/dashboard')}
                 />
