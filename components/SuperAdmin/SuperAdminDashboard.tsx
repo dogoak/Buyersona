@@ -1,33 +1,102 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../services/supabaseClient';
-import { AdminDashboardStats } from '../../types';
 import {
     Users, DollarSign, FileText, Activity, AlertCircle,
-    Clock, CheckCircle2, XCircle, Loader2, ArrowUpRight
+    CheckCircle2, XCircle, Loader2, ArrowLeft, Calendar
 } from 'lucide-react';
 
 export default function SuperAdminDashboard() {
-    const [stats, setStats] = useState<AdminDashboardStats | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [rawProfiles, setRawProfiles] = useState<any[]>([]);
+    const [rawReports, setRawReports] = useState<any[]>([]);
+    const [rawPayments, setRawPayments] = useState<any[]>([]);
+    const [rawLogs, setRawLogs] = useState<any[]>([]);
+
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'logs'>('overview');
+    const [selectedUser, setSelectedUser] = useState<any | null>(null);
+
+    // Quick Filters
+    const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
 
     useEffect(() => {
-        fetchStats();
+        fetchAllData();
     }, []);
 
-    const fetchStats = async () => {
+    const fetchAllData = async () => {
+        setLoading(true);
+        setErrorMsg(null);
         try {
-            const { data, error } = await supabase.rpc('get_admin_dashboard_stats');
-            if (error) throw error;
-            setStats(data as AdminDashboardStats);
+            // Because of Row Level Security, these requires "Admins can view all" policies
+            const [profilesRes, reportsRes, paymentsRes, logsRes] = await Promise.all([
+                supabase.from('profiles').select('*'),
+                supabase.from('business_reports').select('*, product_analyses(*)'),
+                supabase.from('payments').select('*'),
+                supabase.from('system_logs').select('*').order('created_at', { ascending: false })
+            ]);
+
+            if (profilesRes.error) throw new Error("Fallo al cargar usuarios: " + profilesRes.error.message);
+            if (reportsRes.error) throw new Error("Falta política RLS para reportes: " + reportsRes.error.message);
+            if (paymentsRes.error) throw new Error("Fallo al cargar pagos: " + paymentsRes.error.message);
+            if (logsRes.error) throw new Error("Fallo al cargar logs: " + logsRes.error.message);
+
+            setRawProfiles(profilesRes.data || []);
+            setRawReports(reportsRes.data || []);
+            setRawPayments(paymentsRes.data || []);
+            setRawLogs(logsRes.data || []);
+
         } catch (err: any) {
-            console.error('Error fetching admin stats:', err);
-            setError(err.message);
+            console.error(err);
+            setErrorMsg(err.message);
         } finally {
             setLoading(false);
         }
     };
+
+    // Derived State (Filtered by Date)
+    const filteredData = useMemo(() => {
+        let start = new Date(0);
+        let end = new Date();
+        const now = new Date();
+
+        if (dateFilter === 'today') {
+            start = new Date(now.setHours(0, 0, 0, 0));
+        } else if (dateFilter === 'week') {
+            start = new Date(now.setDate(now.getDate() - 7));
+        } else if (dateFilter === 'month') {
+            start = new Date(now.setMonth(now.getMonth() - 1));
+        }
+
+        const byDate = (item: any) => new Date(item.created_at) >= start && new Date(item.created_at) <= end;
+
+        const profiles = rawProfiles.filter(byDate);
+        const reports = rawReports.filter(byDate);
+        const payments = rawPayments.filter((p) => new Date(p.created_at) >= start && new Date(p.created_at) <= end && p.status === 'succeeded');
+        const logs = rawLogs.filter(byDate);
+
+        // Compute User Aggregations internally
+        const usersMap = rawProfiles.map(u => {
+            const userReports = rawReports.filter(r => r.user_id === u.id);
+            const userPayments = rawPayments.filter(p => p.user_id === u.id && p.status === 'succeeded');
+            const totalRevenue = userPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+            return {
+                ...u,
+                reports: userReports,
+                payments: userPayments,
+                totalRevenue
+            };
+        });
+
+        return {
+            profiles,
+            reports,
+            payments,
+            logs,
+            usersAggregated: usersMap.filter(byDate),
+            allUsersAggregated: usersMap // We always keep the list ready regardless of join date for the table
+        };
+    }, [rawProfiles, rawReports, rawPayments, rawLogs, dateFilter]);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-AR', {
@@ -52,43 +121,140 @@ export default function SuperAdminDashboard() {
         );
     }
 
-    if (error || !stats) {
+    if (errorMsg) {
         return (
-            <div className="bg-red-50 border border-red-200 text-red-700 p-6 rounded-2xl max-w-2xl mx-auto mt-8">
-                <div className="flex items-center gap-3 mb-2">
+            <div className="max-w-3xl mx-auto mt-10 bg-red-50 border border-red-200 text-red-800 p-6 rounded-2xl">
+                <div className="flex items-center gap-3 mb-4">
                     <AlertCircle size={24} />
-                    <h3 className="font-bold text-lg">Error loading dashboard</h3>
+                    <h3 className="font-bold text-lg">Se requiere actualizar RLS en Supabase</h3>
                 </div>
-                <p>{error || 'No data returned'}</p>
+                <p className="mb-4">Para poder recolectar toda esta información directamente, debés correr el siguiente código en el <b>SQL Editor</b> de tu panel de Supabase:</p>
+                <div className="bg-slate-900 text-green-400 p-4 rounded-lg font-mono text-xs overflow-x-auto whitespace-pre">
+                    {`CREATE POLICY "Admins can view all reports" ON business_reports FOR SELECT USING (is_admin());
+CREATE POLICY "Admins can view all analyses" ON product_analyses FOR SELECT USING (is_admin());
+CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING (is_admin());`}
+                </div>
+                <p className="mt-4 text-sm text-red-700 italic">Error original: {errorMsg}</p>
                 <button
-                    onClick={fetchStats}
-                    className="mt-4 bg-red-100 hover:bg-red-200 px-4 py-2 rounded-lg font-medium transition"
+                    onClick={fetchAllData}
+                    className="mt-6 bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded-xl transition shadow-lg"
                 >
-                    Try Again
+                    Ya lo ejecuté, Reintentar
                 </button>
             </div>
         );
     }
 
-    const { kpis, user_stats, recent_logs } = stats;
-    const conversionRate = kpis.total_reports > 0
-        ? Math.round((kpis.paid_reports / kpis.total_reports) * 100)
-        : 0;
+    const { reports, payments, profiles, logs, allUsersAggregated } = filteredData;
 
+    const paidReports = reports.filter(r => r.is_paid || r.status === 'completed');
+    const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
+    const prodDeepDives = reports.reduce((sum, r) => sum + (r.product_analyses?.length || 0), 0);
+    const conversionRate = reports.length > 0 ? Math.round((paidReports.length / reports.length) * 100) : 0;
+
+    // USER DETAIL VIEW
+    if (selectedUser) {
+        return (
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in-up">
+                <button
+                    onClick={() => setSelectedUser(null)}
+                    className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition mb-6 font-medium"
+                >
+                    <ArrowLeft size={16} /> Volver al panel general
+                </button>
+
+                <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm mb-8">
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className="w-16 h-16 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-2xl">
+                            {(selectedUser.full_name || selectedUser.email || 'U')[0].toUpperCase()}
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-900">{selectedUser.full_name || 'Sin nombre'}</h2>
+                            <p className="text-slate-500">{selectedUser.email}</p>
+                            <p className="text-sm text-slate-400 mt-1">Registrado el {formatDate(selectedUser.created_at)}</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-6 mb-8">
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                            <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">PAGOS TOTALES</p>
+                            <p className="text-xl font-bold text-emerald-600">{formatCurrency(selectedUser.totalRevenue)}</p>
+                        </div>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                            <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">REPORTES INICIADOS</p>
+                            <p className="text-xl font-bold text-slate-900">{selectedUser.reports.length}</p>
+                        </div>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                            <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">REPORTES PAGADOS</p>
+                            <p className="text-xl font-bold text-slate-900">{selectedUser.reports.filter((r: any) => r.is_paid).length}</p>
+                        </div>
+                    </div>
+
+                    <h3 className="font-bold text-lg mb-4 text-slate-800">Historial de Reportes / Actividad</h3>
+                    {selectedUser.reports.length === 0 ? (
+                        <p className="text-slate-500 italic">Este usuario no inició ningún reporte onboarding aún.</p>
+                    ) : (
+                        <div className="space-y-4">
+                            {selectedUser.reports.map((r: any) => (
+                                <div key={r.id} className="border border-slate-200 rounded-xl p-5 hover:border-indigo-300 transition bg-slate-50/50">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <h4 className="font-bold text-slate-900 text-lg">{r.business_name || 'Sin negocio'}</h4>
+                                            <p className="text-xs text-slate-500">{formatDate(r.created_at)}</p>
+                                        </div>
+                                        <div>
+                                            {r.status === 'draft' && <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-bold">ABANDONÓ ONBOARDING (DRAFT)</span>}
+                                            {r.status === 'completed' && <span className="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded font-bold">PAGADO & ANALIZADO</span>}
+                                            {r.status === 'failed' && <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold">FALLÓ IA</span>}
+                                            {r.status === 'analyzing' && <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold">ANALIZANDO</span>}
+                                        </div>
+                                    </div>
+                                    {r.onboarding_data ? (
+                                        <div className="mt-4 bg-white border border-slate-100 rounded-lg p-3 text-sm">
+                                            <p className="text-slate-600"><span className="font-semibold">Tipo:</span> {r.onboarding_data.distributionModel}</p>
+                                            <p className="text-slate-600 truncate"><span className="font-semibold">Desc:</span> {r.onboarding_data.description}</p>
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-slate-400 mt-2">No se guardaron datos de onboarding.</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // MAIN DASHBOARD
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in-up">
-            <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-900">Super Admin</h1>
-                    <p className="text-slate-500 mt-1">Platform overview and metrics</p>
+                    <h1 className="text-3xl font-bold text-slate-900">Panel de Control General</h1>
+                    <p className="text-slate-500 mt-1">Información dinámica en tiempo real</p>
                 </div>
-                <button
-                    onClick={fetchStats}
-                    className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 transition shadow-sm"
-                >
-                    <Activity size={16} className="text-indigo-600" />
-                    Refresh Data
-                </button>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+                        <Calendar size={16} className="text-slate-400 ml-2 mr-1" />
+                        <select
+                            value={dateFilter}
+                            onChange={(e) => setDateFilter(e.target.value as any)}
+                            className="bg-transparent border-none text-sm font-medium focus:ring-0 py-1 pr-8 text-slate-700 cursor-pointer"
+                        >
+                            <option value="all">Historico Total</option>
+                            <option value="today">Hoy</option>
+                            <option value="week">Últimos 7 días</option>
+                            <option value="month">Último mes</option>
+                        </select>
+                    </div>
+                    <button
+                        onClick={fetchAllData}
+                        className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition"
+                    >
+                        <Activity size={16} /> Actualizar
+                    </button>
+                </div>
             </div>
 
             {/* Tabs */}
@@ -97,68 +263,50 @@ export default function SuperAdminDashboard() {
                     onClick={() => setActiveTab('overview')}
                     className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${activeTab === 'overview' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                    Overview
+                    Métricas
                 </button>
                 <button
                     onClick={() => setActiveTab('users')}
                     className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${activeTab === 'users' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                    Users
+                    Usuarios & Actividad
                 </button>
                 <button
                     onClick={() => setActiveTab('logs')}
                     className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${activeTab === 'logs' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                    System Logs
+                    Log de Errores ({logs.filter(l => l.severity === 'error').length})
                 </button>
             </div>
 
-            {/* OVERVIEW TAB */}
+            {/* METRICS TAB */}
             {activeTab === 'overview' && (
                 <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
-                                    <Users size={24} />
-                                </div>
-                                <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">Total</span>
-                            </div>
-                            <h3 className="text-slate-500 text-sm font-medium mb-1">Registered Users</h3>
-                            <p className="text-3xl font-bold text-slate-900">{kpis.total_users}</p>
+                            <h3 className="text-slate-500 text-sm font-bold mb-1 uppercase">Nuevos Usuarios</h3>
+                            <p className="text-3xl font-bold text-blue-600">{profiles.length}</p>
+                            <p className="text-xs text-slate-400 mt-2">Registrados ({dateFilter})</p>
                         </div>
-
                         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-                                    <DollarSign size={24} />
-                                </div>
-                                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">Revenue</span>
-                            </div>
-                            <h3 className="text-slate-500 text-sm font-medium mb-1">Total Revenue</h3>
-                            <p className="text-3xl font-bold text-slate-900">{formatCurrency(kpis.total_revenue)}</p>
+                            <h3 className="text-slate-500 text-sm font-bold mb-1 uppercase">Ingresos</h3>
+                            <p className="text-3xl font-bold text-emerald-600">{formatCurrency(totalRevenue)}</p>
+                            <p className="text-xs text-slate-400 mt-2">Todos los pagos exitosos</p>
                         </div>
-
                         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
-                                    <FileText size={24} />
-                                </div>
-                                <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded-full">{kpis.paid_reports} Paid</span>
-                            </div>
-                            <h3 className="text-slate-500 text-sm font-medium mb-1">Business Reports</h3>
-                            <p className="text-3xl font-bold text-slate-900">{kpis.total_reports}</p>
+                            <h3 className="text-slate-500 text-sm font-bold mb-1 uppercase">Reportes Creados</h3>
+                            <p className="text-3xl font-bold text-slate-900">{reports.length}</p>
+                            <p className="text-xs text-amber-600 font-medium mt-2">{reports.length - paidReports.length} abandonados / {paidReports.length} pagos</p>
                         </div>
-
                         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
-                                    <Activity size={24} />
-                                </div>
-                                <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-full">Conversion</span>
-                            </div>
-                            <h3 className="text-slate-500 text-sm font-medium mb-1">Paid / Total Ratio</h3>
-                            <p className="text-3xl font-bold text-slate-900">{conversionRate}%</p>
+                            <h3 className="text-slate-500 text-sm font-bold mb-1 uppercase">Conversión a Venta</h3>
+                            <p className="text-3xl font-bold text-indigo-600">{conversionRate}%</p>
+                            <p className="text-xs text-slate-400 mt-2">Visita dashboard vs Pagó</p>
+                        </div>
+                        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                            <h3 className="text-slate-500 text-sm font-bold mb-1 uppercase">Deep Dives (Extras)</h3>
+                            <p className="text-3xl font-bold text-purple-600">{prodDeepDives}</p>
+                            <p className="text-xs text-slate-400 mt-2">Análisis de productos extras</p>
                         </div>
                     </div>
                 </div>
@@ -167,39 +315,49 @@ export default function SuperAdminDashboard() {
             {/* USERS TAB */}
             {activeTab === 'users' && (
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                    <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                        <p className="text-sm font-medium text-slate-600">Hacé clic en cualquier usuario para ver el detalle exacto de su recorrido y reportes.</p>
+                    </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
                             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase font-bold tracking-wider">
                                 <tr>
-                                    <th className="px-6 py-4">User</th>
-                                    <th className="px-6 py-4">Email</th>
-                                    <th className="px-6 py-4">Joined</th>
-                                    <th className="px-6 py-4 text-center">Reports</th>
-                                    <th className="px-6 py-4 text-right">Revenue</th>
+                                    <th className="px-6 py-4">Usuario</th>
+                                    <th className="px-6 py-4">Ingreso</th>
+                                    <th className="px-6 py-4 text-center">Status Onboarding</th>
+                                    <th className="px-6 py-4 text-center">Reportes Pagos</th>
+                                    <th className="px-6 py-4 text-right">LTV (Ingresos)</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {user_stats.map((u) => (
-                                    <tr key={u.id} className="hover:bg-slate-50 transition">
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
-                                                    {(u.full_name || u.email || 'U')[0].toUpperCase()}
+                                {allUsersAggregated.map((u) => {
+                                    const createdReports = u.reports.length;
+                                    const paidReps = u.reports.filter((r: any) => r.is_paid || r.status === 'completed').length;
+
+                                    let statusBadge = <span className="text-xs text-slate-400">Sin comenzar</span>;
+                                    if (createdReports > 0 && paidReps === 0) statusBadge = <span className="bg-amber-100 text-amber-800 text-[10px] uppercase font-bold px-2 py-1 rounded">Abandonó (Draft)</span>;
+                                    if (paidReps > 0) statusBadge = <span className="bg-emerald-100 text-emerald-800 text-[10px] uppercase font-bold px-2 py-1 rounded">Comprador activo</span>;
+
+                                    return (
+                                        <tr key={u.id} onClick={() => setSelectedUser(u)} className="hover:bg-slate-50 transition cursor-pointer group">
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
+                                                        {(u.full_name || u.email || 'U')[0].toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-medium text-slate-900 text-sm group-hover:text-indigo-600 transition">{u.full_name || 'Sin nombre'}</p>
+                                                        <p className="text-xs text-slate-500">{u.email}</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="font-medium text-slate-900 text-sm">{u.full_name || 'No Name'}</p>
-                                                    {u.role === 'admin' && (
-                                                        <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded uppercase">Admin</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-slate-600">{u.email}</td>
-                                        <td className="px-6 py-4 text-sm text-slate-500">{formatDate(u.created_at).split(',')[0]}</td>
-                                        <td className="px-6 py-4 text-sm font-bold text-slate-700 text-center">{u.total_reports}</td>
-                                        <td className="px-6 py-4 text-sm font-bold text-emerald-600 text-right">{formatCurrency(u.total_revenue)}</td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-slate-500">{formatDate(u.created_at).split(',')[0]}</td>
+                                            <td className="px-6 py-4 text-center">{statusBadge}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-slate-700 text-center">{paidReps} <span className="text-slate-400 font-normal">/ {createdReports}</span></td>
+                                            <td className="px-6 py-4 text-sm font-bold text-emerald-600 text-right">{formatCurrency(u.totalRevenue)}</td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -209,24 +367,24 @@ export default function SuperAdminDashboard() {
             {/* LOGS TAB */}
             {activeTab === 'logs' && (
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                    {recent_logs.length === 0 ? (
+                    {logs.length === 0 ? (
                         <div className="p-12 text-center text-slate-500">
                             <CheckCircle2 size={32} className="mx-auto text-emerald-400 mb-3" />
-                            <p>No recent system logs or errors.</p>
+                            <p>No hay logs ni errores en este período.</p>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
                                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase font-bold tracking-wider">
                                     <tr>
-                                        <th className="px-6 py-4">Status</th>
-                                        <th className="px-6 py-4">Timestamp</th>
-                                        <th className="px-6 py-4">Event</th>
-                                        <th className="px-6 py-4">Details</th>
+                                        <th className="px-6 py-4">S</th>
+                                        <th className="px-6 py-4">Fecha</th>
+                                        <th className="px-6 py-4">Evento / Error</th>
+                                        <th className="px-6 py-4 w-1/2">Detalles Técnicos</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {recent_logs.map((log) => (
+                                    {logs.map((log) => (
                                         <tr key={log.id} className="hover:bg-slate-50 transition">
                                             <td className="px-6 py-4">
                                                 {log.severity === 'error' || log.severity === 'critical' ? (
@@ -237,9 +395,9 @@ export default function SuperAdminDashboard() {
                                                     <CheckCircle2 size={18} className="text-emerald-500" />
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-slate-500 whitespace-nowrap">{formatDate(log.created_at)}</td>
-                                            <td className="px-6 py-4 text-sm font-medium text-slate-900 whitespace-nowrap">{log.event_type}</td>
-                                            <td className="px-6 py-4 text-xs text-slate-600 max-w-md truncate font-mono bg-slate-50/50 rounded p-2">
+                                            <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">{formatDate(log.created_at)}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-slate-900 whitespace-nowrap">{log.event_type}</td>
+                                            <td className="px-6 py-4 text-xs text-slate-600 font-mono bg-slate-50/50 rounded p-3 break-all">
                                                 {JSON.stringify(log.event_data)}
                                             </td>
                                         </tr>
