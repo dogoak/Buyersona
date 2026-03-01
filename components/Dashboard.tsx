@@ -430,7 +430,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                         {/* Persona Cards - NOW WITH DEEP PROFILE DETAILS */}
                         <div className="flex flex-col gap-6">
                             {data.demandMap.map((persona, idx) => (
-                                <PersonaDetailCard key={idx} persona={persona} lang={lang} />
+                                <React.Fragment key={idx}>
+                                    <PersonaDetailCard persona={persona} lang={lang} />
+                                </React.Fragment>
                             ))}
                         </div>
                     </div>
