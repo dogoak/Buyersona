@@ -40,7 +40,7 @@ export default function PaymentResult({ status }: PaymentResultProps) {
             if (!report?.is_paid && user) {
                 await supabase
                     .from('business_reports')
-                    .update({ is_paid: true, payment_status: 'paid' })
+                    .update({ is_paid: true, payment_status: 'paid', is_voluntary_payment: false })
                     .eq('id', reportId);
 
                 // Fetch current price to log it properly if missing
