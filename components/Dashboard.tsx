@@ -266,31 +266,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
 
     return (
         <div className="min-h-screen bg-slate-50/50 pb-20 font-sans overflow-x-hidden">
-            {/* Header */}
-            <header className="bg-white/80 backdrop-blur-md border-b border-white/50 sticky top-0 z-20">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-                    <div className="flex items-center space-x-3">
-                        <Isotype className="h-8 w-8 text-slate-900 sm:hidden" />
-                        <FullLogo className="h-8 w-auto text-slate-900 hidden sm:block" />
-                        <div className="hidden sm:block h-8 w-px bg-slate-200 mx-2"></div>
-                        <div className="leading-none hidden sm:block">
-                            <p className="text-xs font-bold text-indigo-600 mt-0.5 max-w-[150px] truncate uppercase tracking-wider">{data.businessClassification}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center space-x-6">
-                        <button
-                            onClick={() => alert("Report generation coming soon")}
-                            className="hidden sm:flex items-center text-sm font-bold text-slate-500 hover:text-indigo-600 transition"
-                        >
-                            <FileText size={16} className="mr-2" />
-                            {t.download_report}
-                        </button>
-                        <button onClick={onReset} className="text-sm font-bold text-slate-400 hover:text-indigo-600 transition">
-                            {t.start_over}
-                        </button>
-                    </div>
-                </div>
-            </header>
+            {/* Cleaned up redundant inner header */}
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-12">
 
