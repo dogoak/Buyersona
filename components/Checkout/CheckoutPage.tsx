@@ -182,10 +182,10 @@ export default function CheckoutPage({ reportId, businessName, onBack, onSuccess
                         {import.meta.env.VITE_FREE_TRIAL === 'true' && (
                             <button
                                 onClick={async () => {
-                                    // Mark as paid and skip payment
+                                    // Mark as paid, skip payment, and set flag for voluntary payment later
                                     await supabase
                                         .from('business_reports')
-                                        .update({ is_paid: true, payment_status: 'paid' })
+                                        .update({ is_paid: true, payment_status: 'paid', is_voluntary_payment: true })
                                         .eq('id', reportId);
                                     onSuccess();
                                 }}

@@ -65,7 +65,7 @@ Deno.serve(async (req: Request) => {
 
         const { data: report, error: reportError } = await supabase
             .from('business_reports')
-            .select('id, business_name, user_id, is_paid')
+            .select('id, business_name, user_id, is_paid, is_voluntary_payment')
             .eq('id', report_id)
             .eq('user_id', user.id)
             .single();
@@ -77,7 +77,7 @@ Deno.serve(async (req: Request) => {
             });
         }
 
-        if (report.is_paid) {
+        if (report.is_paid && !report.is_voluntary_payment) {
             return new Response(JSON.stringify({ error: 'Report already paid' }), {
                 status: 400,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -131,11 +131,11 @@ Deno.serve(async (req: Request) => {
 
         // Add back_urls and auto_return (MercadoPago allows localhost for return URLs)
         // If success_url is provided, we MUST bind back_urls.success
-        if (success_url) {
+        if (success_url && !success_url.includes('localhost') && !success_url.includes('127.0.0.1')) {
             preference.back_urls = {
-                success: success_url,
-                failure: failure_url || success_url,
-                pending: success_url,
+                success: String(success_url),
+                failure: failure_url ? String(failure_url) : String(success_url),
+                pending: String(success_url),
             };
             preference.auto_return = 'approved';
         }
