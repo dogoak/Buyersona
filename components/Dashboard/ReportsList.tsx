@@ -17,6 +17,7 @@ interface Report {
     updated_at: string;
     onboarding_data: any;
     analysis_result: any;
+    current_step: number;
 }
 
 export default function ReportsList() {
@@ -232,7 +233,10 @@ export default function ReportsList() {
                                     key={report.id}
                                     onClick={() => {
                                         if (report.status === 'completed') navigate(`/dashboard/report/${report.id}`);
-                                        if (report.status === 'draft') navigate(`/checkout/${report.id}`);
+                                        if (report.status === 'draft') {
+                                            if (report.current_step >= 6) navigate(`/checkout/${report.id}`);
+                                            else navigate(`/onboarding/${report.id}`);
+                                        }
                                     }}
                                     className={`bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 transition-all group ${isClickable
                                         ? 'hover:shadow-lg hover:border-indigo-200 cursor-pointer hover:-translate-y-0.5 transform'
@@ -294,12 +298,21 @@ export default function ReportsList() {
                                                 </>
                                             )}
                                             {report.status === 'draft' && (
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); navigate(`/checkout/${report.id}`); }}
-                                                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-lg text-sm font-bold hover:shadow-lg transition"
-                                                >
-                                                    <CreditCard size={14} /> Pagar
-                                                </button>
+                                                (report.current_step >= 6 || report.current_step === null || report.current_step === undefined) ? (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); navigate(`/checkout/${report.id}`); }}
+                                                        className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-lg text-sm font-bold hover:shadow-lg transition"
+                                                    >
+                                                        <CreditCard size={14} /> Pagar
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); navigate(`/onboarding/${report.id}`); }}
+                                                        className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-700 rounded-lg text-sm font-bold hover:shadow-lg transition border border-amber-200"
+                                                    >
+                                                        <FileText size={14} /> Retomar
+                                                    </button>
+                                                )
                                             )}
                                             {report.status === 'failed' && (
                                                 <button

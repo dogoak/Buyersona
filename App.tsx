@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Auth/Login';
 import DashboardLayout from './components/Dashboard/DashboardLayout';
@@ -65,13 +65,45 @@ type OnboardingStep = 'onboarding' | 'checkout' | 'analyzing' | 'results' | 'err
 
 function OnboardingPage({ lang }: { lang: Language }) {
   const { user } = useAuth();
+  const { reportId: routeReportId } = useParams();
   const [step, setStep] = useState<OnboardingStep>('onboarding');
   const [analysisResult, setAnalysisResult] = useState<StrategicAnalysis | null>(null);
-  const [reportId, setReportId] = useState<string | null>(null);
+  const [reportId, setReportId] = useState<string | null>(routeReportId || null);
   const [businessName, setBusinessName] = useState('');
   const [onboardingData, setOnboardingData] = useState<BusinessInput | null>(null);
+  const [currentFormStep, setCurrentFormStep] = useState(0);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(!!routeReportId);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    async function loadDraft() {
+      if (!routeReportId || !user) {
+        setIsLoadingDraft(false);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('business_reports')
+          .select('*')
+          .eq('id', routeReportId)
+          .single();
+
+        if (error) throw error;
+        if (data && data.onboarding_data) {
+          setOnboardingData(data.onboarding_data);
+          let savedStep = data.current_step || 0;
+          if (savedStep > 6) savedStep = 6;
+          setCurrentFormStep(savedStep);
+        }
+      } catch (err) {
+        console.error("Failed to load draft:", err);
+      } finally {
+        setIsLoadingDraft(false);
+      }
+    }
+    loadDraft();
+  }, [routeReportId, user]);
 
   // Track step changes
   const handleStepChange = async (newStepIndex: number, data: BusinessInput) => {
@@ -181,7 +213,18 @@ function OnboardingPage({ lang }: { lang: Language }) {
 
   // Step: Onboarding form
   if (step === 'onboarding') {
-    return <Onboarding lang={lang} onComplete={handleOnboardingComplete} onStepChange={handleStepChange} />;
+    if (isLoadingDraft) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+          <div className="flex flex-col items-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-indigo-600 mb-4"></div>
+            <p className="text-slate-500 font-medium">Cargando progreso...</p>
+          </div>
+        </div>
+      );
+    }
+    // We only pass initialData if it has content, otherwise undefined
+    return <Onboarding lang={lang} onComplete={handleOnboardingComplete} onStepChange={handleStepChange} initialStep={currentFormStep} initialData={onboardingData || undefined} />;
   }
 
   // Step: Checkout
@@ -262,6 +305,12 @@ function App() {
 
           {/* Onboarding + Checkout + Analysis Flow (requires auth) */}
           <Route path="/onboarding" element={
+            <PrivateRoute>
+              <OnboardingPage lang={lang} />
+            </PrivateRoute>
+          } />
+
+          <Route path="/onboarding/:reportId" element={
             <PrivateRoute>
               <OnboardingPage lang={lang} />
             </PrivateRoute>

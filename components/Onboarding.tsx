@@ -152,12 +152,17 @@ const SectionTitle: React.FC<SectionTitleProps> = ({ title, icon: Icon }) => (
 interface QuestionProps {
   label: string;
   hint?: string;
+  optional?: boolean;
   children: React.ReactNode;
 }
 
-const Question: React.FC<QuestionProps> = ({ label, hint, children }) => (
+const Question: React.FC<QuestionProps> = ({ label, hint, optional, children }) => (
   <div className="mb-10 animate-fade-in">
-    <label className="block text-sm font-bold text-slate-800 mb-2 uppercase tracking-wide">{label}</label>
+    <label className="block text-sm font-bold text-slate-800 mb-2 tracking-wide flex items-center flex-wrap gap-1.5">
+      <span className="uppercase">{label}</span>
+      {!optional && <span className="text-rose-500 font-bold">*</span>}
+      {optional && <span className="text-[10px] text-slate-400 normal-case font-medium bg-slate-100 px-2 py-0.5 rounded-full">Opcional</span>}
+    </label>
     {hint && <p className="text-sm text-slate-500 mb-4 bg-indigo-50 p-3 rounded-lg inline-block border border-indigo-100">{hint}</p>}
     {!hint && <div className="mb-3"></div>}
     {children}
@@ -480,7 +485,7 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
           </Question>
 
           {/* NEW: Website URL & Analysis */}
-          <Question label={lang === 'es' ? 'Sitio Web (Opcional)' : 'Website URL (Optional)'} hint={lang === 'es' ? 'Analizaremos tu web para entender tu negocio automáticamente.' : 'We will analyze your site to understand your business automatically.'}>
+          <Question label={lang === 'es' ? 'Sitio Web' : 'Website URL'} hint={lang === 'es' ? 'Analizaremos tu web para entender tu negocio automáticamente.' : 'We will analyze your site to understand your business automatically.'} optional>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -500,7 +505,7 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
             </div>
           </Question>
 
-          <Question label={lang === 'es' ? 'Descripción del Negocio' : 'Business Description'} hint={lang === 'es' ? 'Edita si el análisis automático no fue preciso.' : 'Edit if the automatic analysis was not accurate.'}>
+          <Question label={lang === 'es' ? 'Descripción del Negocio' : 'Business Description'} hint={lang === 'es' ? 'Edita si el análisis automático no fue preciso.' : 'Edit if the automatic analysis was not accurate.'} optional>
             <textarea
               className="w-full px-5 py-4 rounded-xl border-2 border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none text-md transition-all h-32"
               value={formData.description}
@@ -509,7 +514,7 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
             />
           </Question>
 
-          <Question label={lang === 'es' ? '¿Qué te diferencia de la competencia?' : 'What differentiates you from competitors?'} hint={lang === 'es' ? 'Tu ventaja competitiva principal.' : 'Your main competitive advantage.'}>
+          <Question label={lang === 'es' ? '¿Qué te diferencia de la competencia?' : 'What differentiates you from competitors?'} hint={lang === 'es' ? 'Tu ventaja competitiva principal.' : 'Your main competitive advantage.'} optional>
             <input
               type="text"
               className="w-full px-5 py-4 rounded-xl border-2 border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none text-lg transition-all"
@@ -613,7 +618,7 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
 
             {/* NEW: File Uploads */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              <Question label={lang === 'es' ? 'Fotos del Producto' : 'Product Photos'} hint={lang === 'es' ? 'Ayuda a la IA a "ver" lo que vendes.' : 'Helps AI "see" what you sell.'}>
+              <Question label={lang === 'es' ? 'Fotos del Producto' : 'Product Photos'} hint={lang === 'es' ? 'Ayuda a la IA a "ver" lo que vendes.' : 'Helps AI "see" what you sell.'} optional>
                 <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:bg-slate-50 transition cursor-pointer relative">
                   <input
                     type="file"
@@ -640,7 +645,7 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
                 )}
               </Question>
 
-              <Question label={lang === 'es' ? 'Documentación / PDF' : 'Documentation / PDF'} hint={lang === 'es' ? 'Brochures, menús, listas de precios.' : 'Brochures, menus, price lists.'}>
+              <Question label={lang === 'es' ? 'Documentación / PDF' : 'Documentation / PDF'} hint={lang === 'es' ? 'Brochures, menús, listas de precios.' : 'Brochures, menus, price lists.'} optional>
                 <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:bg-slate-50 transition cursor-pointer relative">
                   <input
                     type="file"
@@ -1462,7 +1467,7 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
             </div>
           </Question>
 
-          <Question label={lang === 'es' ? '¿Hay algo más que quieras contarnos?' : 'Anything else you want to tell us?'} hint={lang === 'es' ? 'Opcional. Cualquier detalle relevante sobre tu negocio.' : 'Optional. Any relevant detail about your business.'}>
+          <Question label={lang === 'es' ? '¿Hay algo más que quieras contarnos?' : 'Anything else you want to tell us?'} hint={lang === 'es' ? 'Opcional. Cualquier detalle relevante sobre tu negocio.' : 'Optional. Any relevant detail about your business.'} optional>
             <textarea
               className="w-full px-5 py-4 rounded-xl border-2 border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none text-md transition-all h-24"
               value={formData.additionalNotes || ''}
@@ -1477,60 +1482,82 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
     }
   };
 
-  const isCurrentStepValid = () => {
+  const getMissingFields = () => {
     const d = formData;
+    const missing: string[] = [];
+
     switch (currentStep) {
       case 0:
-        return d.businessName && d.locationScope && d.targetRegion && d.businessType.length > 0 && d.distributionModel && (d.businessType.indexOf('other') === -1 || d.customBusinessType);
-      // STAGE 1: PRODUCT INTELLIGENCE
+        if (!d.businessName) missing.push(lang === 'es' ? 'Nombre' : 'Name');
+        if (!d.locationScope) missing.push(lang === 'es' ? 'Alcance' : 'Coverage');
+        if (!d.targetRegion) missing.push(lang === 'es' ? 'Región' : 'Region');
+        if (d.businessType.length === 0) missing.push(lang === 'es' ? 'Tipo de negocio' : 'Business Type');
+        else if (d.businessType.includes('other') && !d.customBusinessType) missing.push(lang === 'es' ? 'Especifique tipo de negocio' : 'Specify business type');
+        if (!d.distributionModel) missing.push(lang === 'es' ? 'Modelo (B2B/B2C)' : 'B2B/B2C Model');
+        break;
       case 1:
         const showB2B = d.distributionModel === 'b2b' || d.distributionModel === 'both';
         const showB2C = d.distributionModel === 'b2c' || d.distributionModel === 'both';
 
-        let b2bValid = true;
-        let b2cValid = true;
+        if (!d.productName) missing.push(lang === 'es' ? 'Qué vendés' : 'What you sell');
+        if (!d.painOfInaction) missing.push(lang === 'es' ? 'Qué pasa si no te compran' : 'Pain of inaction');
+        if (d.usageFrequency.length === 0) missing.push(lang === 'es' ? 'Frecuencia de compra' : 'Purchase frequency');
 
         if (showB2B) {
-          b2bValid = !!(d.b2bUseCase?.length && d.b2bBuyerRole?.length && d.b2bProblemSolved?.length && d.b2bPurchaseDrivers?.length) &&
-            (!d.b2bProblemSolved?.includes('other') || !!d.customB2bProblem) &&
-            (d.b2bPurchaseDrivers.indexOf('other') === -1 || !!d.customB2bDriver);
+          if (!d.b2bUseCase?.length) missing.push(lang === 'es' ? 'Uso (B2B)' : 'B2B Use Case');
+          if (!d.b2bBuyerRole?.length) missing.push(lang === 'es' ? 'Quién decide (B2B)' : 'B2B Decision Maker');
+          if (!d.b2bProblemSolved?.length) missing.push(lang === 'es' ? 'Problema principal (B2B)' : 'B2B Main Problem');
+          else if (d.b2bProblemSolved.includes('other') && !d.customB2bProblem) missing.push(lang === 'es' ? 'Describa el problema (B2B)' : 'Describe B2B Problem');
+          if (!d.b2bPurchaseDrivers?.length) missing.push(lang === 'es' ? 'Por qué te eligen (B2B)' : 'B2B Purchase Drivers');
+          else if (d.b2bPurchaseDrivers.includes('other') && !d.customB2bDriver) missing.push(lang === 'es' ? 'Describa el motivo (B2B)' : 'Describe B2B Driver');
         }
         if (showB2C) {
-          b2cValid = !!(d.b2cPurchaseContext?.length && d.b2cProblemSolved?.length && d.b2cPurchaseDrivers?.length && d.b2cNaturalChannel?.length) &&
-            (!d.b2cProblemSolved?.includes('other') || !!d.customB2cProblem) &&
-            (d.b2cPurchaseDrivers.indexOf('other') === -1 || !!d.customB2cDriver);
+          if (!d.b2cPurchaseContext?.length) missing.push(lang === 'es' ? 'Contexto de compra (B2C)' : 'B2C Purchase Context');
+          if (!d.b2cProblemSolved?.length) missing.push(lang === 'es' ? 'Problema que resolvés (B2C)' : 'B2C Problem Solved');
+          else if (d.b2cProblemSolved.includes('other') && !d.customB2cProblem) missing.push(lang === 'es' ? 'Describa el problema (B2C)' : 'Describe B2C Problem');
+          if (!d.b2cPurchaseDrivers?.length) missing.push(lang === 'es' ? 'Factor de decisión (B2C)' : 'B2C Purchase Driver');
+          else if (d.b2cPurchaseDrivers.includes('other') && !d.customB2cDriver) missing.push(lang === 'es' ? 'Describa el motivo (B2C)' : 'Describe B2C Driver');
+          if (!d.b2cNaturalChannel?.length) missing.push(lang === 'es' ? 'Dónde buscan (B2C)' : 'B2C Natural Channel');
         }
-
-        // Removed marketPositioning and priceRelativity from here as they moved to Step 2
-        return d.productName !== '' && d.painOfInaction !== '' && d.usageFrequency.length > 0 && b2bValid && b2cValid;
-
+        break;
       case 2:
-        // Added marketPositioning and priceRelativity validation here
-        return d.targetCustomer.length > 0 &&
-          d.paymentModel.length > 0 &&
-          d.productPrice !== '' &&
-          d.purchaseVolume !== '' &&
-          d.customerValue.length > 0 &&
-          d.salesCycle.length > 0 &&
-          d.marketPositioning !== '' &&
-          d.priceRelativity !== '';
+        if (d.targetCustomer.length === 0) missing.push(lang === 'es' ? 'Perfil del cliente' : 'Customer Profile');
+        if (d.paymentModel.length === 0) missing.push(lang === 'es' ? 'Modelo de cobro' : 'Payment Model');
+        if (!d.productPrice) missing.push(lang === 'es' ? 'Ticket promedio' : 'Average Ticket');
+        if (!d.purchaseVolume) missing.push(lang === 'es' ? 'Volumen por compra' : 'Purchase Volume');
+        if (d.customerValue.length === 0) missing.push(lang === 'es' ? 'Valor del cliente (LTV)' : 'Customer Lifetime Value');
+        if (d.salesCycle.length === 0) missing.push(lang === 'es' ? 'Ciclo de venta' : 'Sales Cycle');
+        if (!d.marketPositioning) missing.push(lang === 'es' ? 'Posicionamiento' : 'Market Positioning');
+        if (!d.priceRelativity) missing.push(lang === 'es' ? 'Precio relativo' : 'Relative Pricing');
+        break;
       case 3:
-        const salesChanValid = d.salesChannels.length > 0;
-        const acqChanValid = d.acquisitionChannels.length > 0 && (d.acquisitionChannels.indexOf('Other') === -1 || d.customAcquisitionChannel);
-        const adSpendValid = d.adSpendRange && (d.adSpendRange !== 'custom' || d.customAdSpend);
-
-        return salesChanValid && acqChanValid && adSpendValid && d.demandPredictability;
+        if (d.salesChannels.length === 0) missing.push(lang === 'es' ? 'Canales de venta' : 'Sales Channels');
+        if (d.acquisitionChannels.length === 0) missing.push(lang === 'es' ? 'Canales de adquisición' : 'Acquisition Channels');
+        else if (d.acquisitionChannels.includes('Other') && !d.customAcquisitionChannel) missing.push(lang === 'es' ? 'Especifique adquisición' : 'Specify acquisition');
+        if (!d.adSpendRange) missing.push(lang === 'es' ? 'Presupuesto en Ads' : 'Ad Spend Range');
+        else if (d.adSpendRange === 'custom' && !d.customAdSpend) missing.push(lang === 'es' ? 'Especifique presupuesto' : 'Specify ad spend');
+        if (!d.demandPredictability) missing.push(lang === 'es' ? 'Comportamiento de demanda' : 'Demand predictability');
+        break;
       case 4:
-        // If exploring secondary, readiness is required
-        const readinessValid = !d.exploreSecondaryMarket || d.supportReadiness;
-        return d.teamSize > 0 && d.capacityChannel.length > 0 && d.surgeHandling && d.responseSla && d.automationTools.length > 0 && readinessValid;
+        if (!d.teamSize || d.teamSize <= 0) missing.push(lang === 'es' ? 'Tamaño del equipo' : 'Team Size');
+        if (d.capacityChannel.length === 0) missing.push(lang === 'es' ? 'Cuello de botella' : 'Bottleneck');
+        if (!d.surgeHandling) missing.push(lang === 'es' ? 'Escalabilidad' : 'Scalability');
+        if (!d.responseSla) missing.push(lang === 'es' ? 'Tiempo de respuesta' : 'Response SLA');
+        if (d.automationTools.length === 0) missing.push(lang === 'es' ? 'Automatización' : 'Automation');
+        if (d.exploreSecondaryMarket && !d.supportReadiness) missing.push(lang === 'es' ? 'Preparación para soporte' : 'Support Readiness');
+        break;
       case 5:
-        return d.primaryPain.length > 0;
+        if (d.primaryPain.length === 0) missing.push(lang === 'es' ? 'Dolor comercial' : 'Commercial Pain');
+        break;
       case 6:
-        return d.growthGoal.length > 0 && d.growthPace;
-      default: return true;
+        if (d.growthGoal.length === 0) missing.push(lang === 'es' ? 'Objetivo principal' : 'Main Goal');
+        if (!d.growthPace) missing.push(lang === 'es' ? 'Ritmo de crecimiento' : 'Growth Pace');
+        break;
     }
+    return missing;
   };
+
+  const isCurrentStepValid = () => getMissingFields().length === 0;
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-8 relative">
@@ -1568,17 +1595,27 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
 
 
 
-          <button
-            onClick={next}
-            disabled={!isCurrentStepValid()}
-            className={`flex items-center px-10 py-4 rounded-2xl font-bold text-lg shadow-xl transition-all transform hover:-translate-y-1 ${isCurrentStepValid()
-              ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:shadow-indigo-500/30'
-              : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-              }`}
-          >
-            {currentStep === TOTAL_STEPS - 1 ? t.finish : t.next}
-            <ArrowRight size={22} className="ml-2" />
-          </button>
+          <div className="flex flex-col items-end gap-2">
+            {!isCurrentStepValid() && (
+              <div className="text-right animate-fade-in pr-2">
+                <span className="text-xs font-bold text-rose-500 bg-rose-50 px-3 py-1.5 rounded-full border border-rose-100 flex items-center gap-1.5 shadow-sm">
+                  <AlertTriangle size={12} />
+                  Falta: {getMissingFields().join(', ')}
+                </span>
+              </div>
+            )}
+            <button
+              onClick={next}
+              disabled={!isCurrentStepValid()}
+              className={`flex items-center px-10 py-4 rounded-2xl font-bold text-lg shadow-xl transition-all transform hover:-translate-y-1 ${isCurrentStepValid()
+                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:shadow-indigo-500/30'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+            >
+              {currentStep === TOTAL_STEPS - 1 ? t.finish : t.next}
+              <ArrowRight size={22} className="ml-2" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
