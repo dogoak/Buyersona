@@ -20,6 +20,7 @@ export default function ReportView({ lang }: ReportViewProps) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [downloading, setDownloading] = useState(false);
+    const [isPaying, setIsPaying] = useState(false);
 
     useEffect(() => {
         fetchReport();
@@ -103,8 +104,9 @@ export default function ReportView({ lang }: ReportViewProps) {
     };
 
     const handleVoluntaryPayment = async () => {
-        if (!user || !report) return;
+        if (!user || !report || isPaying) return;
 
+        setIsPaying(true);
         try {
             const session = await supabase.auth.getSession();
             const token = session.data.session?.access_token;
@@ -144,6 +146,7 @@ export default function ReportView({ lang }: ReportViewProps) {
         } catch (err: any) {
             console.error('Voluntary Payment error:', err);
             setError(err.message || 'Error al procesar. Intentalo de nuevo más tarde.');
+            setIsPaying(false);
         }
     };
 
@@ -239,11 +242,16 @@ export default function ReportView({ lang }: ReportViewProps) {
 
                             <button
                                 onClick={handleVoluntaryPayment}
-                                className="group relative inline-flex items-center justify-center gap-3 bg-white text-indigo-900 px-10 py-5 rounded-2xl font-black text-xl hover:bg-indigo-50 transition-all transform hover:-translate-y-1 hover:shadow-[0_0_40px_rgba(255,255,255,0.3)] w-full sm:w-auto overflow-hidden"
+                                disabled={isPaying}
+                                className={`group relative inline-flex items-center justify-center gap-3 bg-white text-indigo-900 px-10 py-5 rounded-2xl font-black text-xl hover:bg-indigo-50 transition-all transform hover:-translate-y-1 hover:shadow-[0_0_40px_rgba(255,255,255,0.3)] w-full sm:w-auto overflow-hidden ${isPaying ? 'opacity-90 cursor-wait transform-none hover:transform-none hover:shadow-none' : ''}`}
                             >
                                 <span className="absolute inset-0 w-full h-full -mt-1 rounded-lg opacity-30 bg-gradient-to-b from-transparent via-transparent to-black"></span>
-                                <CreditCard size={24} className="text-indigo-600 group-hover:scale-110 transition-transform" />
-                                <span className="relative">Aportar y apoyar el proyecto</span>
+                                {isPaying ? (
+                                    <Loader2 size={24} className="text-indigo-600 animate-spin" />
+                                ) : (
+                                    <CreditCard size={24} className="text-indigo-600 group-hover:scale-110 transition-transform" />
+                                )}
+                                <span className="relative">{isPaying ? 'Procesando...' : 'Aportar y apoyar el proyecto'}</span>
                             </button>
                         </div>
                     </div>
