@@ -26,32 +26,28 @@ Deno.serve(async (req: Request) => {
             });
         }
 
-        // Admin client bypasses RLS - used for data lookups and auth validation
+        // Admin client bypasses RLS - used for data lookups
         const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-        // Extract the JWT token from Authorization header
+        // Validate user JWT directly via GoTrue API (bypasses supabase-js auth quirks)
         const token = authHeader.replace('Bearer ', '').trim();
+        const authResponse = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'apikey': SUPABASE_SERVICE_ROLE_KEY,
+            },
+        });
 
-        if (!token || token === 'undefined' || token === 'null') {
-            return new Response(JSON.stringify({ error: 'Malformed or missing authorization token' }), {
+        if (!authResponse.ok) {
+            const authBody = await authResponse.text();
+            console.error('Auth validation failed:', authResponse.status, authBody);
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                 status: 401,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
         }
 
-        // Use admin client to validate the user's JWT
-        const { data: { user }, error: authError } = await adminClient.auth.getUser(token);
-
-        if (authError || !user) {
-            console.error('Auth Error:', JSON.stringify(authError));
-            return new Response(JSON.stringify({
-                error: 'Unauthorized',
-                details: authError,
-            }), {
-                status: 401,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-        }
+        const user = await authResponse.json();
 
         const { report_id, analysis_id, success_url, failure_url } = await req.json();
 
