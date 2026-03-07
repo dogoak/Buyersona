@@ -75,6 +75,7 @@ export default function DeepDiveCheckout() {
                     body: JSON.stringify({
                         analysis_id: analysisId,
                         success_url: `${window.location.origin}/dashboard/payment/success?analysis_id=${analysisId}`,
+                        failure_url: `${window.location.origin}/dashboard/payment/failure?analysis_id=${analysisId}`,
                     }),
                 }
             );
