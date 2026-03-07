@@ -1,10 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.6";
 
 const MP_ACCESS_TOKEN = Deno.env.get('MP_ACCESS_TOKEN')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -26,28 +25,34 @@ Deno.serve(async (req: Request) => {
             });
         }
 
-        // Admin client bypasses RLS - used for data lookups
-        const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-        // Validate user JWT directly via GoTrue API (bypasses supabase-js auth quirks)
-        const token = authHeader.replace('Bearer ', '').trim();
-        const authResponse = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'apikey': SUPABASE_SERVICE_ROLE_KEY,
-            },
+        // Initialize user-level client with Anon Key and user's JWT
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            global: { headers: { Authorization: authHeader } }
         });
 
-        if (!authResponse.ok) {
-            const authBody = await authResponse.text();
-            console.error('Auth validation failed:', authResponse.status, authBody);
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        // Use the passed JWT token explicitly
+        const token = authHeader.replace('Bearer ', '').trim();
+
+        if (!token || token === 'undefined' || token === 'null') {
+            return new Response(JSON.stringify({ error: 'Malformed or missing authorization token' }), {
                 status: 401,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
         }
 
-        const user = await authResponse.json();
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+        if (authError || !user) {
+            console.error('Auth Error Payload:', authError, 'Token Start:', token.substring(0, 15));
+            return new Response(JSON.stringify({
+                error: 'Unauthorized',
+                details: authError,
+                debug_token_received: token.substring(0, 20) + '...'
+            }), {
+                status: 401,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+        }
 
         const { report_id, analysis_id, success_url, failure_url } = await req.json();
 
@@ -58,15 +63,17 @@ Deno.serve(async (req: Request) => {
             });
         }
 
+        // Initialize Admin client strictly for robust data lookups (bypasses RLS)
+        const adminClient = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+
         let paymentTargetId = report_id;
         let itemTitle = 'Analisis Estrategico - Mi Negocio';
         let itemDescription = 'Informe estrategico completo con buyer personas, canales de adquisicion, analisis competitivo y plan de accion.';
         let isAlreadyPaid = false;
-        let isDeepDive = false;
+        let isDeepDive = !!analysis_id;
 
-        if (analysis_id) {
-            // DEEP DIVE PAYMENT FLOW
-            isDeepDive = true;
+        if (isDeepDive) {
+            // -- DEEP DIVE LOGIC --
             const { data: analysis, error: analysisError } = await adminClient
                 .from('product_analyses')
                 .select('id, business_report_id, user_id, is_paid, business_reports(user_id, business_name)')
@@ -96,7 +103,7 @@ Deno.serve(async (req: Request) => {
             itemDescription = 'Analisis tactico profundo de producto, mapa conductual, pitch de ventas y matriz de objeciones.';
             paymentTargetId = analysis_id;
         } else {
-            // STANDARD BUSINESS REPORT PAYMENT FLOW
+            // -- BUSINESS REPORT LOGIC --
             const { data: report, error: reportError } = await adminClient
                 .from('business_reports')
                 .select('id, business_name, user_id, is_paid, is_voluntary_payment')
@@ -113,7 +120,6 @@ Deno.serve(async (req: Request) => {
 
             isAlreadyPaid = report.is_paid && !report.is_voluntary_payment;
             itemTitle = `Analisis Estrategico - ${report.business_name || 'Mi Negocio'}`;
-            paymentTargetId = report_id;
         }
 
         if (isAlreadyPaid) {
@@ -123,7 +129,7 @@ Deno.serve(async (req: Request) => {
             });
         }
 
-        // Fetch dynamic prices from system settings
+        // Fetch dynamic pricing from system settings
         const { data: settings, error: settingsError } = await adminClient
             .from('system_settings')
             .select('report_price_ars, deep_dive_price_ars')
@@ -137,11 +143,11 @@ Deno.serve(async (req: Request) => {
             });
         }
 
-        // Use the correct price based on product type
         const unitPrice = isDeepDive
             ? (settings.deep_dive_price_ars || 12500)
             : (settings.report_price_ars || 25000);
 
+        // Detect if we are running in local development (Mercado Pago rejects local IPs for webhooks)
         const isLocalDevelopment = SUPABASE_URL.includes('localhost') || SUPABASE_URL.includes('127.0.0.1');
 
         const preference: Record<string, unknown> = {
@@ -167,10 +173,13 @@ Deno.serve(async (req: Request) => {
             },
         };
 
+        // MercadoPago requires notification_url to be publicly reachable HTTPS
         if (!isLocalDevelopment) {
             preference.notification_url = `${SUPABASE_URL}/functions/v1/mp-webhook`;
         }
 
+        // Add back_urls and auto_return (MercadoPago allows localhost for return URLs)
+        // If success_url is provided, we MUST bind back_urls.success
         if (success_url && !success_url.includes('localhost') && !success_url.includes('127.0.0.1')) {
             preference.back_urls = {
                 success: String(success_url),
@@ -209,9 +218,9 @@ Deno.serve(async (req: Request) => {
             external_payment_id: String(mpData.id),
         };
 
-        // Link to the correct table
+        // Link appropriately
         if (isDeepDive) {
-            paymentRecord.business_report_id = null; // Deep dives don't link to business_reports directly
+            paymentRecord.business_report_id = null;
         } else {
             paymentRecord.business_report_id = report_id;
         }
