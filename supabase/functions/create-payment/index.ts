@@ -26,15 +26,21 @@ Deno.serve(async (req: Request) => {
             });
         }
 
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            global: { headers: { Authorization: authHeader } }
-        });
-
-        // Admin client bypasses RLS - used for data lookups in payment flow
+        // Admin client bypasses RLS - used for data lookups and auth validation
         const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-        // Verify user identity using the JWT in the Authorization header
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        // Extract the JWT token from Authorization header
+        const token = authHeader.replace('Bearer ', '').trim();
+
+        if (!token || token === 'undefined' || token === 'null') {
+            return new Response(JSON.stringify({ error: 'Malformed or missing authorization token' }), {
+                status: 401,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+        }
+
+        // Use admin client to validate the user's JWT
+        const { data: { user }, error: authError } = await adminClient.auth.getUser(token);
 
         if (authError || !user) {
             console.error('Auth Error:', JSON.stringify(authError));
