@@ -258,6 +258,169 @@ export interface StrategicAnalysis {
   growthOpportunities?: GrowthOpportunity[]; // New: Alternative Markets/Clients
 }
 
+// ----------------------------------------------------------------------
+// PRODUCT DEEP DIVE TYPES (EXTREME GRANULARITY V2)
+// ----------------------------------------------------------------------
+
+export interface DeepDiveInput {
+  analysisScope?: 'specific_product' | 'product_family'; // New: one SKU vs product line
+  productFamilyDescription?: string; // Description of the product family when scope is 'product_family'
+  productName: string;
+  productDescription: string;
+  productUrl?: string;
+  productImages?: string[]; // Used for AI analysis only, stripped before DB save
+  unitPrice: string;
+  unitCost?: string;
+  specificPainSolved: string;
+  currentCustomerProfile: string;
+  desiredCustomerProfile: string;
+  mainObjection: string;
+  directCompetitors: string[];
+
+  // Strategic context (multi-choice)
+  targetAudience?: string[];     // B2B, B2C, B2B2C, D2C — multi-select
+  salesPlatforms?: string[];     // Selected platforms
+  expectedVolume?: string;       // Volume range
+  differentiator?: string;       // Precio, Calidad, Diseño, Servicio, Innovación, Exclusividad, No sé
+  deliveryModel?: string;        // Digital, Físico, Servicio, Combo
+  priceRange?: string;           // <$10, $10-50, $50-200, $200-1000, >$1000
+  repurchaseFrequency?: string[];// Única, Mensual, etc. — multi-select
+  productStage?: string;         // Idea, MVP, En Ventas, Escala
+  currentMargin?: string;        // Computed or free text
+  unitCostRaw?: string;          // Raw cost input for margin calculator
+  uniqueAngle?: string;          // What makes it different from generic alternatives
+  salesModel?: string;           // Mayorista, Minorista, Ambos, Nuevos Mercados
+}
+
+export interface DayInLifeProfile {
+  morningRoutine: string;
+  workdayHabits: string;
+  eveningRoutine: string;
+  weekendActivities: string;
+  frequentPhysicalPlaces: string[];
+  frequentDigitalPlaces: string[];
+  musicAndEntertainment: string;
+  vehicleAndCommute: string;
+  vacationPreferences: string;
+  socialCircle: string;
+}
+
+export interface AspirationalProfile {
+  clothingBrands: string[];
+  roleModels: string[];
+  influencersFollowed: string[];
+  contentCreatorsConsumed: string[];
+  lifeGoals: string;
+}
+
+export interface DeepDiveGoToMarket {
+  primaryChannel: string;
+  secondaryChannel: string;
+  thePerfectPitch: string;
+  toneOfVoice: string;
+  specificTactics: string[];
+}
+
+export interface DeepDivePersona {
+  name: string;
+  type: 'Ideal' | 'Secundario' | 'Emergente' | 'Nicho' | 'Aspiracional';
+  oneLiner: string;
+  demographic: DemographicProfile;
+  psychological: PsychologicalProfile;
+  social: SocialProfile;
+  dayInTheLife: DayInLifeProfile;
+  aspirations: AspirationalProfile;
+  goToMarket: DeepDiveGoToMarket;
+}
+
+export interface ObjectionHandling {
+  objection: string;
+  severity: 'Alta' | 'Media' | 'Baja';
+  twoLineResponse: string;
+  underlyingFear: string;
+  reframeTechnique: string;     // Psychological reframe approach
+}
+
+export interface SalesSurvivalKit {
+  coldEmailTemplate: string;
+  coldDmTemplate: string;       // DM version for Instagram/WhatsApp
+  landingPageStructure: string[];
+  adAngles: string[];
+  elevatorPitch: string;        // 30-second pitch
+}
+
+export interface DeepDiveMarketStrategy {
+  businessModel: 'B2B' | 'B2C' | 'B2B2C' | 'D2C';
+  modelJustification: string;
+  recommendedPlatforms: string[];
+  expectedMonthlyVolume: string;
+  retentionStrategies: string[];
+  loyaltyHooks: string[];
+}
+
+export interface PricingStrategy {
+  currentPriceAssessment: string;  // Is it too high, too low, right?
+  recommendedPrice: string;
+  justification: string;
+  psychologicalAnchors: string[];  // Anchoring techniques
+  bundleOpportunities: string[];
+}
+
+export interface ContentCalendarDay {
+  day: string;         // "Lunes", "Martes", etc.
+  platform: string;    // "Instagram", "LinkedIn", etc.
+  format: string;      // "Reel", "Carousel", "Story"
+  topic: string;
+  copyExample: string;
+  cta: string;
+}
+
+export interface UnitEconomics {
+  estimatedCAC: string;
+  estimatedLTV: string;
+  breakEvenUnits: string;
+  suggestedMargin: string;
+  roiProjection: string;
+}
+
+export interface DeepDiveExecutionStep {
+  phase: 'ShortTerm' | 'MediumTerm';
+  timing: string;
+  focus: string;
+  actions: string[];
+  metrics: string[];
+}
+
+export interface SeasonalityInsight {
+  period: string;
+  intensity: 'Alta' | 'Media' | 'Baja';
+  keyDates: string[];
+  strategy: string;
+}
+
+export interface QuickWin {
+  action: string;
+  timeToExecute: string;
+  expectedImpact: string;
+  tools: string[];
+}
+
+export interface DeepDiveResult {
+  summary: string;
+  marketStrategy: DeepDiveMarketStrategy;
+  pricingStrategy: PricingStrategy;
+  unitEconomics: UnitEconomics;
+  contentCalendar: ContentCalendarDay[];
+  targetPersonas: DeepDivePersona[];
+  objectionMatrix: ObjectionHandling[];
+  competitorTearDown: CompetitorAnalysis[];
+  socialListeningNiche: SocialListening[];
+  salesSurvivalKit: SalesSurvivalKit;
+  executionPlan: DeepDiveExecutionStep[];
+  seasonality?: SeasonalityInsight[];
+  quickWins?: QuickWin[];
+}
+
 export enum AppState {
   LANDING = 'LANDING',
   AUTH = 'AUTH',

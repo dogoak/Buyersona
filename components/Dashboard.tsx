@@ -4,7 +4,7 @@ import { translations } from '../utils/translations';
 import {
     AlertTriangle, CheckCircle, ShieldAlert, Award, Star,
     Briefcase, Brain, Users, DollarSign, TrendingUp, Lock, ChevronDown, ChevronUp,
-    Building, User, Rocket, XCircle, Check, Target, Megaphone, Zap, BarChart, Crosshair, ArrowRight, MessageCircle, FileText, GitBranch, Waves, ArrowDown
+    Building, User, Rocket, XCircle, Check, Target, Megaphone, Zap, BarChart, Crosshair, ArrowRight, MessageCircle, FileText, GitBranch, Waves, ArrowDown, Sparkles
 } from 'lucide-react';
 
 import { FullLogo, Isotype } from './BrandAssets';
@@ -13,6 +13,7 @@ interface DashboardProps {
     data: StrategicAnalysis;
     lang: Language;
     onReset: () => void;
+    onProfundizar?: (title: string, content: string) => void;
 }
 
 const getPersonaColor = (type: PersonaType) => {
@@ -71,17 +72,20 @@ const PersonaDetailCard = ({ persona, lang }: { persona: Persona, lang: Language
                     <div className="flex border-b border-slate-200 print:hidden">
                         <button
                             onClick={() => setActiveTab('strategy')}
-                            className={`flex-1 py-4 text-sm font-bold uppercase tracking-wider transition-colors ${activeTab === 'strategy' ? 'bg-white text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600'
+                            className={`flex-1 py-4 text-sm font-bold uppercase tracking-wider transition-colors ${activeTab === 'strategy' ? 'bg-white text-indigo-600 border-b-2 border-indigo-600' : 'text-indigo-400/70 hover:text-indigo-600 hover:bg-indigo-50/50'
                                 }`}
                         >
                             {t.tab_strategy}
                         </button>
                         <button
                             onClick={() => setActiveTab('profile')}
-                            className={`flex-1 py-4 text-sm font-bold uppercase tracking-wider transition-colors ${activeTab === 'profile' ? 'bg-white text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600'
+                            className={`flex-1 py-4 text-sm font-bold uppercase tracking-wider transition-colors relative ${activeTab === 'profile' ? 'bg-white text-indigo-600 border-b-2 border-indigo-600' : 'text-indigo-400/70 hover:text-indigo-600 hover:bg-indigo-50/50'
                                 }`}
                         >
                             {t.tab_profile}
+                            {activeTab !== 'profile' && (
+                                <span className="ml-1.5 inline-block w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse align-middle" />
+                            )}
                         </button>
                     </div>
 
@@ -261,7 +265,7 @@ const PersonaDetailCard = ({ persona, lang }: { persona: Persona, lang: Language
     );
 };
 
-export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset, onProfundizar }) => {
     const t = translations[lang].dashboard;
 
     return (
@@ -285,16 +289,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10">
                             {/* Benchmarks */}
                             <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Target CAC</p>
+                                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">{lang === 'es' ? 'CAC Objetivo' : 'Target CAC'}</p>
                                 <p className="text-2xl font-bold text-emerald-400">{data.marketInsights.benchmarkCAC}</p>
+                                <p className="text-[10px] text-slate-500 mt-1">{lang === 'es' ? 'Cuánto cuesta conseguir un cliente' : 'Cost to acquire one customer'}</p>
                             </div>
                             <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Conv. Rate</p>
+                                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">{lang === 'es' ? 'Tasa de Conversión' : 'Conv. Rate'}</p>
                                 <p className="text-2xl font-bold text-blue-400">{data.marketInsights.benchmarkConversion}</p>
+                                <p className="text-[10px] text-slate-500 mt-1">{lang === 'es' ? 'De 100 visitas, cuántas compran' : 'Of 100 visitors, how many buy'}</p>
                             </div>
                             <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Sales Cycle</p>
+                                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">{lang === 'es' ? 'Ciclo de Venta' : 'Sales Cycle'}</p>
                                 <p className="text-2xl font-bold text-indigo-400">{data.marketInsights.typicalSalesCycle}</p>
+                                <p className="text-[10px] text-slate-500 mt-1">{lang === 'es' ? 'Tiempo hasta que alguien te compra' : 'Time until someone buys'}</p>
                             </div>
 
                             {/* Trends */}
@@ -345,14 +352,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                                     </div>
                                     <div className="grid grid-cols-2 gap-4 text-sm">
                                         <div>
-                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Overlap</span>
+                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">{lang === 'es' ? 'Solapamiento' : 'Overlap'}</span>
                                             <p className="text-rose-600 font-medium leading-tight">{comp.overlap}</p>
                                         </div>
                                         <div>
-                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Your Edge</span>
+                                            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">{lang === 'es' ? 'Tu Ventaja' : 'Your Edge'}</span>
                                             <p className="text-emerald-600 font-medium leading-tight">{comp.differentiation}</p>
                                         </div>
                                     </div>
+                                    {onProfundizar && (
+                                        <button
+                                            onClick={() => onProfundizar(
+                                                `Competidor: ${comp.name}`,
+                                                `${comp.name} (${comp.website}). Solapamiento: ${comp.overlap}. Ventaja: ${comp.differentiation}`
+                                            )}
+                                            className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded-lg hover:bg-violet-100 transition"
+                                        >
+                                            <Sparkles size={12} />
+                                            {lang === 'es' ? `Profundizar sobre ${comp.name}` : `Deep dive on ${comp.name}`}
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                             {(!data.competitors || data.competitors.length === 0) && (
@@ -384,7 +403,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                                     </div>
                                     <p className="text-slate-800 font-medium text-sm mb-2">"{item.insight}"</p>
                                     <div className="flex items-center text-xs text-slate-400">
-                                        <span className="font-semibold text-indigo-500 mr-2">Topic:</span> {item.topic}
+                                        <span className="font-semibold text-indigo-500 mr-2">{lang === 'es' ? 'Tema:' : 'Topic:'}</span> {item.topic}
                                     </div>
                                 </div>
                             ))}
@@ -410,6 +429,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                             {data.demandMap?.map((persona, idx) => (
                                 <React.Fragment key={idx}>
                                     <PersonaDetailCard persona={persona} lang={lang} />
+                                    {onProfundizar && (
+                                        <div className="mt-3 flex justify-end">
+                                            <button
+                                                onClick={() => onProfundizar(
+                                                    `Persona: ${persona.name}`,
+                                                    `${persona.name} (${persona.type}). ${persona.oneLiner}. Score: ${persona.suitabilityScore}/100. Edad: ${persona.demographic?.ageRange}. Estrategia: ${persona.strategy?.approach}`
+                                                )}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-violet-600 bg-violet-50 border border-violet-200 rounded-lg hover:bg-violet-100 transition"
+                                            >
+                                                <Sparkles size={12} />
+                                                {lang === 'es' ? `Profundizar sobre ${persona.name}` : `Deep dive on ${persona.name}`}
+                                            </button>
+                                        </div>
+                                    )}
                                 </React.Fragment>
                             ))}
                         </div>
@@ -459,8 +492,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                                 <Waves size={28} className="text-white" />
                             </div>
                             <div>
-                                <h2 className="text-2xl font-black tracking-tight leading-none">{t.blue_ocean}</h2>
-                                <p className="text-blue-100 text-sm font-medium mt-1 opacity-80">Strategic Positioning & Value Innovation</p>
+                                <h2 className="text-2xl font-black tracking-tight leading-none">{lang === 'es' ? 'Estrategia de Diferenciación' : 'Differentiation Strategy'}</h2>
+                                <p className="text-blue-100 text-sm font-medium mt-1 opacity-80">{lang === 'es' ? 'Cómo destacarte en tu mercado' : 'How to stand out in your market'}</p>
                             </div>
                         </div>
 
@@ -468,9 +501,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                             {/* Status & Path */}
                             <div className="lg:col-span-1 flex flex-col gap-6">
                                 <div className="bg-white/10 p-6 rounded-2xl border border-white/20 backdrop-blur-sm">
-                                    <span className="text-xs font-bold uppercase tracking-wider opacity-70 block mb-2">Current State</span>
+                                    <span className="text-xs font-bold uppercase tracking-wider opacity-70 block mb-2">{lang === 'es' ? 'Estado Actual' : 'Current State'}</span>
                                     <div className={`text-3xl font-black mb-3 tracking-tight ${data.blueOcean.status === 'Red Ocean' ? 'text-rose-200' : 'text-cyan-100'}`}>
-                                        {data.blueOcean.status}
+                                        {data.blueOcean.status === 'Red Ocean' ? (lang === 'es' ? '🔴 Mercado Saturado' : '🔴 Saturated Market') : (lang === 'es' ? '🔵 Mercado Abierto' : '🔵 Open Market')}
                                     </div>
                                     <p className="text-sm font-medium leading-relaxed opacity-90 border-t border-white/10 pt-3">
                                         {data.blueOcean.diagnosis}
@@ -478,7 +511,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                                 </div>
 
                                 <div className="bg-white text-blue-900 p-6 rounded-2xl shadow-lg flex-grow flex flex-col justify-center">
-                                    <span className="text-xs font-bold uppercase tracking-wider text-blue-400 block mb-2">Strategic Move</span>
+                                    <span className="text-xs font-bold uppercase tracking-wider text-blue-400 block mb-2">{lang === 'es' ? 'Cómo Diferenciarte' : 'How to Differentiate'}</span>
                                     <p className="text-lg font-bold leading-snug">
                                         "{data.blueOcean.blueOceanPath}"
                                     </p>
@@ -491,7 +524,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                                 <div className="bg-rose-500/20 border border-rose-200/30 p-5 rounded-2xl backdrop-blur-sm hover:bg-rose-500/30 transition">
                                     <div className="flex items-center mb-3 text-rose-200">
                                         <XCircle size={18} className="mr-2" />
-                                        <h4 className="font-bold text-xs uppercase tracking-widest">Eliminate</h4>
+                                        <h4 className="font-bold text-xs uppercase tracking-widest">{lang === 'es' ? 'Eliminar' : 'Eliminate'}</h4>
                                     </div>
                                     <ul className="space-y-2">
                                         {data.blueOcean.errcGrid?.eliminate?.map((item, i) => (
@@ -504,7 +537,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                                 <div className="bg-emerald-500/20 border border-emerald-200/30 p-5 rounded-2xl backdrop-blur-sm hover:bg-emerald-500/30 transition">
                                     <div className="flex items-center mb-3 text-emerald-200">
                                         <TrendingUp size={18} className="mr-2" />
-                                        <h4 className="font-bold text-xs uppercase tracking-widest">Raise</h4>
+                                        <h4 className="font-bold text-xs uppercase tracking-widest">{lang === 'es' ? 'Potenciar' : 'Raise'}</h4>
                                     </div>
                                     <ul className="space-y-2">
                                         {data.blueOcean.errcGrid?.raise?.map((item, i) => (
@@ -517,7 +550,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                                 <div className="bg-amber-500/20 border border-amber-200/30 p-5 rounded-2xl backdrop-blur-sm hover:bg-amber-500/30 transition">
                                     <div className="flex items-center mb-3 text-amber-200">
                                         <ArrowDown size={18} className="mr-2" />
-                                        <h4 className="font-bold text-xs uppercase tracking-widest">Reduce</h4>
+                                        <h4 className="font-bold text-xs uppercase tracking-widest">{lang === 'es' ? 'Reducir' : 'Reduce'}</h4>
                                     </div>
                                     <ul className="space-y-2">
                                         {data.blueOcean.errcGrid?.reduce?.map((item, i) => (
@@ -530,7 +563,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                                 <div className="bg-indigo-500/40 border border-indigo-200/40 p-5 rounded-2xl backdrop-blur-sm hover:bg-indigo-500/50 transition shadow-lg shadow-indigo-900/20">
                                     <div className="flex items-center mb-3 text-indigo-200">
                                         <Zap size={18} className="mr-2" />
-                                        <h4 className="font-bold text-xs uppercase tracking-widest">Create</h4>
+                                        <h4 className="font-bold text-xs uppercase tracking-widest">{lang === 'es' ? 'Crear' : 'Create'}</h4>
                                     </div>
                                     <ul className="space-y-2">
                                         {data.blueOcean.errcGrid?.create?.map((item, i) => (
@@ -565,7 +598,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
 
                                     <div className="grid grid-cols-2 gap-4 text-xs">
                                         <div>
-                                            <span className="font-bold text-emerald-600 uppercase tracking-wider block mb-1">Pros</span>
+                                            <span className="font-bold text-emerald-600 uppercase tracking-wider block mb-1">{lang === 'es' ? 'A Favor' : 'Pros'}</span>
                                             <ul className="space-y-1">
                                                 {opp.pros.map((p, i) => (
                                                     <li key={i} className="flex items-start text-slate-700">
@@ -576,7 +609,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                                             </ul>
                                         </div>
                                         <div>
-                                            <span className="font-bold text-rose-600 uppercase tracking-wider block mb-1">Cons</span>
+                                            <span className="font-bold text-rose-600 uppercase tracking-wider block mb-1">{lang === 'es' ? 'En Contra' : 'Cons'}</span>
                                             <ul className="space-y-1">
                                                 {opp.cons.map((c, i) => (
                                                     <li key={i} className="flex items-start text-slate-700">
@@ -620,26 +653,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset }) => 
                     </div>
                 </section>
 
-                {/* Product Deep Dive CTA */}
-                <section className="bg-white rounded-[2rem] p-8 sm:p-12 shadow-xl border border-indigo-100 text-center relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
-                    <div className="max-w-2xl mx-auto relative z-10">
-                        <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-6 text-indigo-600 shadow-lg shadow-indigo-200">
-                            <Rocket size={32} />
-                        </div>
-                        <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-4">{t.deep_dive_title}</h2>
-                        <p className="text-lg text-slate-600 font-medium mb-8 leading-relaxed">
-                            {t.deep_dive_desc}
-                        </p>
-                        <button
-                            onClick={() => alert("Coming soon: Product Analysis Module")}
-                            className="inline-flex items-center px-8 py-4 rounded-xl bg-slate-900 text-white font-bold text-lg shadow-xl hover:bg-indigo-600 hover:shadow-indigo-500/30 transition-all transform hover:-translate-y-1"
-                        >
-                            <Zap size={20} className="mr-2 text-yellow-400" />
-                            {t.deep_dive_btn}
-                        </button>
-                    </div>
-                </section>
+
+
 
             </main>
         </div>

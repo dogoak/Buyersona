@@ -1,11 +1,6 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { callGeminiProxy } from './geminiProxyClient';
 import { BusinessInput, StrategicAnalysis, Language } from "../types";
-
-const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
-if (!apiKey) {
-    console.warn('Gemini API key not set. AI analysis features will not work.');
-}
-const ai = new GoogleGenAI({ apiKey: apiKey || 'placeholder' });
 
 export const analyzeWebsite = async (url: string, lang: Language): Promise<{ result: string, costUsd: number }> => {
     const modelName = 'gemini-2.5-flash'; // Faster model for initial scrape
@@ -29,12 +24,12 @@ export const analyzeWebsite = async (url: string, lang: Language): Promise<{ res
            Respond ONLY with the JSON.`;
 
     try {
-        const response = await ai.models.generateContent({
+        const response = await callGeminiProxy({
+            action: 'analyze_website',
             model: modelName,
             contents: prompt,
             config: {
                 tools: [{ googleSearch: {} }],
-                // responseMimeType: "application/json" // Removed as it conflicts with tools in this model version
             }
         });
 
@@ -210,11 +205,12 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
         });
     }
 
-    const response = await ai.models.generateContent({
+    const response = await callGeminiProxy({
+        action: 'analyze_business',
         model: modelName,
         contents: contents,
         config: {
-            tools: [{ googleSearch: {} }], // Enable Search for Competitors/Social
+            tools: [{ googleSearch: {} }],
             thinkingConfig: { thinkingBudget: 16000 },
             responseMimeType: "application/json",
             responseSchema: {
@@ -421,8 +417,8 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
 
         let costUsd = 0;
         if (response.usageMetadata) {
-            costUsd = (response.usageMetadata.promptTokenCount * inputTokenPriceUsd) +
-                (response.usageMetadata.candidatesTokenCount * outputTokenPriceUsd);
+            costUsd = ((response.usageMetadata.promptTokenCount || 0) * inputTokenPriceUsd) +
+                ((response.usageMetadata.candidatesTokenCount || 0) * outputTokenPriceUsd);
         } else {
             // Fallback token estimation (approx 4 chars per token)
             const estimatedPromptTokens = JSON.stringify(input).length / 4;

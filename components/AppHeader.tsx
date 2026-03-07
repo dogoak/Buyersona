@@ -168,7 +168,7 @@ export default function AppHeader({ lang, setLang }: AppHeaderProps) {
                                 {/* Version Indicator */}
                                 <div className="bg-slate-50 border-t border-slate-100 px-4 py-2">
                                     <p className="text-[10px] text-slate-400 font-mono text-center">
-                                        v1.0.0
+                                        v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'}
                                     </p>
                                 </div>
                             </div>

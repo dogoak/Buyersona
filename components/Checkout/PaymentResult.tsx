@@ -13,15 +13,16 @@ export default function PaymentResult({ status }: PaymentResultProps) {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const reportId = searchParams.get('report_id');
+    const analysisId = searchParams.get('analysis_id');
     const paymentId = searchParams.get('payment_id') || `manual_${Date.now()}`;
     const [checking, setChecking] = useState(status === 'success');
 
     // If success, verify payment and trigger analysis
     useEffect(() => {
-        if (status === 'success' && reportId) {
+        if (status === 'success' && (reportId || analysisId)) {
             verifyAndProceed();
         }
-    }, [status, reportId]);
+    }, [status, reportId, analysisId]);
 
     const verifyAndProceed = async () => {
         setChecking(true);
@@ -30,39 +31,83 @@ export default function PaymentResult({ status }: PaymentResultProps) {
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         // Check if report is marked as paid
-        const { data: report } = await supabase
-            .from('business_reports')
-            .select('is_paid, status')
-            .eq('id', reportId)
-            .single();
+        if (analysisId) {
+            const { data: analysis } = await supabase
+                .from('product_analyses')
+                .select('is_paid, status')
+                .eq('id', analysisId)
+                .single();
 
-        if (report?.is_paid || status === 'success') {
-            if (!report?.is_paid && user) {
-                await supabase
-                    .from('business_reports')
-                    .update({ is_paid: true, payment_status: 'paid', is_voluntary_payment: false })
-                    .eq('id', reportId);
-
-                // Fetch current price to log it properly if missing
-                const { data: settings } = await supabase.from('system_settings').select('report_price_ars').eq('id', 1).single();
-                const priceArs = settings?.report_price_ars || 5000;
-
-                // Record the payment in the billing table manually using upsert (fallback for missing webhooks in local)
-                const { error: paymentError } = await supabase
-                    .from('payments')
-                    .upsert({
-                        business_report_id: reportId,
-                        user_id: user.id,
-                        status: 'succeeded',
-                        amount: priceArs,
-                        external_payment_id: paymentId,
-                        currency: 'ARS'
-                    }, { onConflict: 'external_payment_id' });
-
-                if (paymentError) console.log('Payment row might already exist', paymentError);
+            if (analysis?.is_paid || status === 'success') {
+                if (!analysis?.is_paid && user) {
+                    await supabase
+                        .from('product_analyses')
+                        .update({ is_paid: true })
+                        .eq('id', analysisId);
+                }
+                setChecking(false);
+            } else {
+                setChecking(false);
             }
+        } else if (reportId) {
+            const { data: report } = await supabase
+                .from('business_reports')
+                .select('is_paid, status, is_voluntary_payment')
+                .eq('id', reportId)
+                .single();
 
-            setChecking(false);
+            if (report?.is_paid || status === 'success') {
+                if (!report?.is_paid && user) {
+                    // If the report was a voluntary/beta report, keep the flag so we can track
+                    // that it was originally free and then paid voluntarily
+                    const wasVoluntary = report?.is_voluntary_payment || false;
+                    await supabase
+                        .from('business_reports')
+                        .update({ is_paid: true, payment_status: 'paid', is_voluntary_payment: wasVoluntary })
+                        .eq('id', reportId);
+
+                    // Fetch current price to log it properly if missing
+                    const { data: settings } = await supabase.from('system_settings').select('report_price_ars').eq('id', 1).single();
+                    const priceArs = settings?.report_price_ars || 5000;
+
+                    // Update ALL pending payment rows for this report to succeeded
+                    const { error: paymentError } = await supabase
+                        .from('payments')
+                        .update({
+                            status: 'succeeded',
+                            external_payment_id: paymentId,
+                        })
+                        .eq('business_report_id', reportId)
+                        .eq('user_id', user.id)
+                        .eq('status', 'pending');
+
+                    if (paymentError) console.log('Payment update error', paymentError);
+
+                    // Fallback: if no pending row existed, insert one
+                    const { data: existingPayments } = await supabase
+                        .from('payments')
+                        .select('id')
+                        .eq('business_report_id', reportId)
+                        .eq('status', 'succeeded')
+                        .limit(1);
+
+                    if (!existingPayments || existingPayments.length === 0) {
+                        await supabase.from('payments').insert({
+                            business_report_id: reportId,
+                            user_id: user.id,
+                            status: 'succeeded',
+                            amount: priceArs,
+                            external_payment_id: paymentId,
+                            currency: 'ARS',
+                            payment_provider: 'mercadopago',
+                        });
+                    }
+                }
+
+                setChecking(false);
+            } else {
+                setChecking(false);
+            }
         } else {
             setChecking(false);
         }
@@ -90,10 +135,16 @@ export default function PaymentResult({ status }: PaymentResultProps) {
                         Tu pago fue procesado correctamente. Ya podés generar tu informe estratégico.
                     </p>
                     <button
-                        onClick={() => navigate(`/dashboard/report/${reportId}`)}
+                        onClick={() => {
+                            if (analysisId) {
+                                navigate(`/dashboard`);
+                            } else {
+                                navigate(`/dashboard/report/${reportId}`);
+                            }
+                        }}
                         className="group inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-8 py-4 rounded-2xl font-bold hover:shadow-xl hover:shadow-indigo-200 transition-all transform hover:-translate-y-0.5"
                     >
-                        Ver mi informe
+                        {analysisId ? 'Volver al panel' : 'Ver mi informe'}
                         <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                     </button>
                 </div>
