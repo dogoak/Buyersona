@@ -195,9 +195,9 @@ export default function PaymentResult({ status }: PaymentResultProps) {
                     <button
                         onClick={() => {
                             if (analysisId) {
-                                navigate(`/dashboard/deepdive/${analysisId}`);
+                                navigate(`/deep-dive/checkout/${analysisId}`);
                             } else if (reportId) {
-                                navigate(`/dashboard/report/${reportId}`);
+                                navigate(`/checkout/${reportId}`);
                             } else {
                                 navigate('/dashboard');
                             }
