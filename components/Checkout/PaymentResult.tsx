@@ -193,7 +193,15 @@ export default function PaymentResult({ status }: PaymentResultProps) {
                         Ir al panel
                     </button>
                     <button
-                        onClick={() => navigate(`/onboarding`)}
+                        onClick={() => {
+                            if (analysisId) {
+                                navigate(`/dashboard/deepdive/${analysisId}`);
+                            } else if (reportId) {
+                                navigate(`/dashboard/report/${reportId}`);
+                            } else {
+                                navigate('/dashboard');
+                            }
+                        }}
                         className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition"
                     >
                         <RotateCcw size={16} />

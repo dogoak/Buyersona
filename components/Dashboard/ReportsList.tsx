@@ -340,13 +340,18 @@ export default function ReportsList() {
                                         : ''
                                         }`}
                                 >
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                         {/* Report Info */}
                                         <div className="flex items-center gap-4 flex-1 min-w-0">
                                             <div className="w-12 h-12 bg-gradient-to-br from-indigo-50 to-violet-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
                                                 {report.type === 'product' ? <Search size={22} className="text-violet-600" /> : <BarChart3 size={22} className="text-indigo-600" />}
                                             </div>
                                             <div className="min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${report.type === 'product' ? 'bg-violet-100 text-violet-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                                        {report.type === 'product' ? 'Product Deep Dive' : 'Análisis Estratégico'}
+                                                    </span>
+                                                </div>
                                                 <h3 className="text-lg font-bold text-slate-900 truncate group-hover:text-indigo-700 transition-colors">
                                                     {report.business_name || 'Sin nombre'}
                                                 </h3>
@@ -361,7 +366,7 @@ export default function ReportsList() {
                                         </div>
 
                                         {/* Actions */}
-                                        <div className="flex items-center gap-1.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                        <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
                                             {isClickable && (
                                                 <>
                                                     <button
