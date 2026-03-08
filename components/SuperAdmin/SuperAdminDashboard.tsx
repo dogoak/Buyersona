@@ -1119,6 +1119,7 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
                                                 fb.comment_general && { cat: 'General', text: fb.comment_general },
                                                 fb.comment_onboarding && { cat: 'Onboarding', text: fb.comment_onboarding },
                                                 fb.comment_quality && { cat: 'Calidad', text: fb.comment_quality },
+                                                fb.suggestions && { cat: '💡 Sugerencias', text: fb.suggestions },
                                             ].filter(Boolean);
 
                                             return (

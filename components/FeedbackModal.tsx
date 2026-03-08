@@ -29,6 +29,7 @@ export default function FeedbackModal({ reportId, deepDiveId, reportType, userId
     const [commentGeneral, setCommentGeneral] = useState('');
     const [commentOnboarding, setCommentOnboarding] = useState('');
     const [commentQuality, setCommentQuality] = useState('');
+    const [suggestions, setSuggestions] = useState('');
 
     const emojiLabels = lang === 'es' ? EMOJI_LABELS_ES : EMOJI_LABELS_EN;
 
@@ -70,6 +71,7 @@ export default function FeedbackModal({ reportId, deepDiveId, reportType, userId
                 comment_general: commentGeneral.trim() || null,
                 comment_onboarding: commentOnboarding.trim() || null,
                 comment_quality: commentQuality.trim() || null,
+                suggestions: suggestions.trim() || null,
             });
 
             if (error) throw error;
@@ -188,6 +190,25 @@ export default function FeedbackModal({ reportId, deepDiveId, reportType, userId
                                 commentPlaceholder={lang === 'es' ? '¿Qué mejorarías del reporte? (opcional)' : 'What would you improve about the report? (optional)'}
                                 lang={lang}
                             />
+
+                            <hr className="border-slate-100" />
+
+                            {/* General suggestions */}
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-1">
+                                    {lang === 'es' ? '¿Cómo podemos mejorar?' : 'How can we improve?'}
+                                </label>
+                                <p className="text-xs text-slate-400 mb-2">
+                                    {lang === 'es' ? 'Sugerencias, ideas, mejoras... ¡todo suma!' : 'Suggestions, ideas, improvements... everything helps!'}
+                                </p>
+                                <textarea
+                                    value={suggestions}
+                                    onChange={(e) => setSuggestions(e.target.value)}
+                                    rows={3}
+                                    placeholder={lang === 'es' ? 'Contanos qué te gustaría que mejoremos, qué faltó, qué cambiarías...' : 'Tell us what you would like us to improve, what was missing, what you would change...'}
+                                    className="w-full p-3 border border-slate-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none resize-none transition"
+                                />
+                            </div>
 
                             {/* Submit */}
                             <button
