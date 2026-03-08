@@ -16,6 +16,7 @@ import {
 import { analyzeProductDeepDive } from '../../services/geminiDeepDiveService';
 import ProfundizarPanel from '../ProfundizarPanel';
 import GlossaryModal from '../GlossaryModal';
+import FeedbackModal from '../FeedbackModal';
 import type {
     DeepDiveResult, DeepDivePersona, ObjectionHandling, CompetitorAnalysis,
     SalesSurvivalKit, DeepDiveExecutionStep, PricingStrategy, UnitEconomics,
@@ -397,6 +398,16 @@ export default function DeepDiveView() {
                             <Sparkles size={16} />
                             {lang === 'es' ? 'Profundizar esta sección' : 'Deep dive this section'}
                         </button>
+                    </div>
+
+                    {/* Feedback trigger */}
+                    <div className="mt-8 print:hidden">
+                        <FeedbackModal
+                            deepDiveId={reportId}
+                            reportType="deepdive"
+                            userId={user!.id}
+                            lang={lang}
+                        />
                     </div>
                 </div>
 

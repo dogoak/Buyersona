@@ -9,6 +9,7 @@ import { Language, StrategicAnalysis } from '../../types';
 import { ArrowLeft, Loader2, Download, AlertCircle, Heart, CreditCard, TrendingUp, Search, Zap, ArrowRight, Sparkles } from 'lucide-react';
 import ProfundizarPanel from '../ProfundizarPanel';
 import GlossaryModal from '../GlossaryModal';
+import FeedbackModal from '../FeedbackModal';
 
 interface ReportViewProps {
     lang: Language;
@@ -342,6 +343,16 @@ export default function ReportView({ lang }: ReportViewProps) {
                             </div>
                         )}
                     </div>
+                </div>
+
+                {/* Feedback trigger */}
+                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 my-8 print:hidden">
+                    <FeedbackModal
+                        reportId={reportId}
+                        reportType="business"
+                        userId={user!.id}
+                        lang={lang}
+                    />
                 </div>
 
                 {/* --- NUEVO BLOQUE: Solo visible si es un pago voluntario Y aún no pagó --- */}

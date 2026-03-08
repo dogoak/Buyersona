@@ -3,7 +3,7 @@ import { supabase } from '../../services/supabaseClient';
 import {
     Users, DollarSign, FileText, Activity, AlertCircle,
     CheckCircle, XCircle, Loader2, ArrowLeft, Calendar, Settings,
-    ArrowUpRight, Search, Filter, Download, BarChart3, RefreshCw, Trash2, Cpu, Eye, X, UserCheck
+    ArrowUpRight, Search, Filter, Download, BarChart3, RefreshCw, Trash2, Cpu, Eye, X, UserCheck, MessageSquareHeart
 } from 'lucide-react';
 import { Dashboard } from '../Dashboard';
 import { StrategicAnalysis } from '../../types';
@@ -20,9 +20,10 @@ export default function SuperAdminDashboard() {
     const [rawLogs, setRawLogs] = useState<any[]>([]);
     const [rawSettings, setRawSettings] = useState<any>(null);
     const [rawDeepDives, setRawDeepDives] = useState<any[]>([]);
+    const [rawFeedback, setRawFeedback] = useState<any[]>([]);
 
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'kpis' | 'usuarios' | 'logs' | 'settings' | 'finanzas'>('kpis');
+    const [activeTab, setActiveTab] = useState<'kpis' | 'usuarios' | 'logs' | 'settings' | 'finanzas' | 'feedback'>('kpis');
     const [selectedUser, setSelectedUser] = useState<any | null>(null);
     const [priceInput, setPriceInput] = useState<string>('');
     const [deepDivePriceInput, setDeepDivePriceInput] = useState<string>('');
@@ -53,13 +54,14 @@ export default function SuperAdminDashboard() {
         setErrorMsg(null);
         try {
             // Optimized queries to avoid massive JSON payloads (analysis_result) which causes timeouts
-            const [profilesRes, reportsRes, paymentsRes, logsRes, settingsRes, deepDiveRes] = await Promise.all([
+            const [profilesRes, reportsRes, paymentsRes, logsRes, settingsRes, deepDiveRes, feedbackRes] = await Promise.all([
                 supabase.from('profiles').select('id, email, full_name, created_at, role'),
                 supabase.from('business_reports').select('id, user_id, created_at, business_name, status, is_paid, is_voluntary_payment, payment_status, current_step, api_cost_usd, onboarding_data, error_details, product_analyses!product_analyses_business_report_id_fkey(id)'),
                 supabase.from('payments').select('*'),
                 supabase.from('system_logs').select('*').order('created_at', { ascending: false }).limit(500),
                 supabase.from('system_settings').select('*').eq('id', 1).single(),
-                supabase.from('product_analyses').select('id, business_report_id, product_name, status, is_paid, created_at, product_input_data, business_reports!product_analyses_business_report_id_fkey(user_id, business_name)')
+                supabase.from('product_analyses').select('id, business_report_id, product_name, status, is_paid, created_at, product_input_data, business_reports!product_analyses_business_report_id_fkey(user_id, business_name)'),
+                supabase.from('report_feedback').select('*').order('created_at', { ascending: false })
             ]);
 
             if (profilesRes.error) throw new Error("Fallo al cargar usuarios: " + profilesRes.error.message);
@@ -73,6 +75,7 @@ export default function SuperAdminDashboard() {
             setRawLogs(logsRes.data || []);
             setRawSettings(settingsRes.data || null);
             setRawDeepDives(deepDiveRes.data || []);
+            setRawFeedback(feedbackRes.data || []);
             if (settingsRes.data?.report_price_ars) setPriceInput(settingsRes.data.report_price_ars.toString());
             if (settingsRes.data?.deep_dive_price_ars) setDeepDivePriceInput(settingsRes.data.deep_dive_price_ars.toString());
             if (settingsRes.data?.exchange_rate_usd) setExchangeRateInput(settingsRes.data.exchange_rate_usd.toString());
@@ -627,6 +630,12 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
                 >
                     <Settings size={16} /> Configuración
                 </button>
+                <button
+                    onClick={() => setActiveTab('feedback')}
+                    className={`px - 4 py - 2 rounded - lg text - sm font - semibold transition flex items - center gap - 1 ${activeTab === 'feedback' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'} `}
+                >
+                    <MessageSquareHeart size={16} /> Feedback ({rawFeedback.length})
+                </button>
             </div>
 
             {/* METRICS TAB */}
@@ -1032,6 +1041,92 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
                         {isSaving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
                         Guardar Cambios
                     </button>
+                </div>
+            )}
+
+            {/* FEEDBACK TAB */}
+            {activeTab === 'feedback' && (
+                <div className="space-y-6">
+                    {/* Summary Cards */}
+                    {(() => {
+                        const total = rawFeedback.length;
+                        const avgGeneral = total > 0 ? (rawFeedback.reduce((s, f) => s + f.rating_general, 0) / total).toFixed(1) : '—';
+                        const avgOnboarding = total > 0 ? (rawFeedback.reduce((s, f) => s + f.rating_onboarding, 0) / total).toFixed(1) : '—';
+                        const avgQuality = total > 0 ? (rawFeedback.reduce((s, f) => s + f.rating_quality, 0) / total).toFixed(1) : '—';
+                        const emojis = ['😡', '😕', '😐', '🙂', '🤩'];
+                        const emojiForAvg = (avg: string) => avg === '—' ? '—' : emojis[Math.min(Math.round(Number(avg)) - 1, 4)];
+
+                        return (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                                    <p className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Total Feedbacks</p>
+                                    <p className="text-2xl font-bold text-slate-900">{total}</p>
+                                </div>
+                                <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                                    <p className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Rating General</p>
+                                    <p className="text-2xl font-bold text-indigo-600">{emojiForAvg(avgGeneral as string)} {avgGeneral}</p>
+                                </div>
+                                <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                                    <p className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Onboarding</p>
+                                    <p className="text-2xl font-bold text-blue-600">{emojiForAvg(avgOnboarding as string)} {avgOnboarding}</p>
+                                </div>
+                                <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                                    <p className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Calidad</p>
+                                    <p className="text-2xl font-bold text-emerald-600">{emojiForAvg(avgQuality as string)} {avgQuality}</p>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    {/* Feedback Table */}
+                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                        {rawFeedback.length === 0 ? (
+                            <div className="p-12 text-center text-slate-500">
+                                <MessageSquareHeart size={32} className="mx-auto text-slate-300 mb-3" />
+                                <p>Todavía no hay feedbacks.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase font-bold tracking-wider">
+                                        <tr>
+                                            <th className="px-4 py-3">Fecha</th>
+                                            <th className="px-4 py-3">Usuario</th>
+                                            <th className="px-4 py-3">Tipo</th>
+                                            <th className="px-4 py-3 text-center">General</th>
+                                            <th className="px-4 py-3 text-center">Onboarding</th>
+                                            <th className="px-4 py-3 text-center">Calidad</th>
+                                            <th className="px-4 py-3">Comentario</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {rawFeedback.map((fb: any) => {
+                                            const profile = rawProfiles.find(p => p.id === fb.user_id);
+                                            const emojis = ['😡', '😕', '😐', '🙂', '🤩'];
+                                            return (
+                                                <tr key={fb.id} className="hover:bg-slate-50">
+                                                    <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{formatDate(fb.created_at)}</td>
+                                                    <td className="px-4 py-3">
+                                                        <p className="text-sm font-medium text-slate-900">{profile?.full_name || 'Sin nombre'}</p>
+                                                        <p className="text-xs text-slate-400">{profile?.email || fb.user_id.slice(0, 8)}</p>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <span className={`text-xs font-bold px-2 py-1 rounded ${fb.report_type === 'business' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}`}>
+                                                            {fb.report_type === 'business' ? 'Análisis' : 'Deep Dive'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center text-2xl">{emojis[fb.rating_general - 1]}</td>
+                                                    <td className="px-4 py-3 text-center text-2xl">{emojis[fb.rating_onboarding - 1]}</td>
+                                                    <td className="px-4 py-3 text-center text-2xl">{emojis[fb.rating_quality - 1]}</td>
+                                                    <td className="px-4 py-3 text-sm text-slate-600 max-w-xs truncate">{fb.comment || <span className="text-slate-300 italic">—</span>}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </div>
