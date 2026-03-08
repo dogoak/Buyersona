@@ -24,7 +24,11 @@ export default function FeedbackModal({ reportId, deepDiveId, reportType, userId
     const [ratingGeneral, setRatingGeneral] = useState(0);
     const [ratingOnboarding, setRatingOnboarding] = useState(0);
     const [ratingQuality, setRatingQuality] = useState(0);
-    const [comment, setComment] = useState('');
+
+    // Per-category comments
+    const [commentGeneral, setCommentGeneral] = useState('');
+    const [commentOnboarding, setCommentOnboarding] = useState('');
+    const [commentQuality, setCommentQuality] = useState('');
 
     const emojiLabels = lang === 'es' ? EMOJI_LABELS_ES : EMOJI_LABELS_EN;
 
@@ -63,7 +67,9 @@ export default function FeedbackModal({ reportId, deepDiveId, reportType, userId
                 rating_general: ratingGeneral,
                 rating_onboarding: ratingOnboarding,
                 rating_quality: ratingQuality,
-                comment: comment.trim() || null,
+                comment_general: commentGeneral.trim() || null,
+                comment_onboarding: commentOnboarding.trim() || null,
+                comment_quality: commentQuality.trim() || null,
             });
 
             if (error) throw error;
@@ -122,9 +128,9 @@ export default function FeedbackModal({ reportId, deepDiveId, reportType, userId
                     className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
                     onClick={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}
                 >
-                    <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-scale-up">
+                    <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-scale-up max-h-[90vh] flex flex-col">
                         {/* Header */}
-                        <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5 flex items-center justify-between">
+                        <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5 flex items-center justify-between flex-shrink-0">
                             <div className="flex items-center gap-3">
                                 <MessageSquareHeart size={22} className="text-white" />
                                 <h3 className="text-white font-bold text-lg">
@@ -139,45 +145,49 @@ export default function FeedbackModal({ reportId, deepDiveId, reportType, userId
                             </button>
                         </div>
 
-                        <div className="p-6 space-y-6">
+                        <div className="p-6 space-y-5 overflow-y-auto flex-1">
                             {/* Rating Category: General */}
                             <RatingRow
                                 label={lang === 'es' ? 'Rating General' : 'Overall Rating'}
+                                sublabel={lang === 'es' ? '¿Qué te pareció en general?' : 'How was it overall?'}
                                 value={ratingGeneral}
                                 onChange={setRatingGeneral}
                                 emojiLabels={emojiLabels}
+                                comment={commentGeneral}
+                                onCommentChange={setCommentGeneral}
+                                commentPlaceholder={lang === 'es' ? '¿Por qué esta puntuación? (opcional)' : 'Why this score? (optional)'}
+                                lang={lang}
                             />
+
+                            <hr className="border-slate-100" />
 
                             {/* Rating Category: Onboarding */}
                             <RatingRow
                                 label={lang === 'es' ? 'Facilidad del Onboarding' : 'Onboarding Ease'}
+                                sublabel={lang === 'es' ? '¿Fue fácil completar el formulario inicial?' : 'Was the initial form easy to complete?'}
                                 value={ratingOnboarding}
                                 onChange={setRatingOnboarding}
                                 emojiLabels={emojiLabels}
+                                comment={commentOnboarding}
+                                onCommentChange={setCommentOnboarding}
+                                commentPlaceholder={lang === 'es' ? '¿Qué mejorarías del onboarding? (opcional)' : 'What would you improve about onboarding? (optional)'}
+                                lang={lang}
                             />
+
+                            <hr className="border-slate-100" />
 
                             {/* Rating Category: Quality */}
                             <RatingRow
                                 label={lang === 'es' ? 'Calidad del Reporte' : 'Report Quality'}
+                                sublabel={lang === 'es' ? '¿El contenido fue útil y accionable?' : 'Was the content useful and actionable?'}
                                 value={ratingQuality}
                                 onChange={setRatingQuality}
                                 emojiLabels={emojiLabels}
+                                comment={commentQuality}
+                                onCommentChange={setCommentQuality}
+                                commentPlaceholder={lang === 'es' ? '¿Qué mejorarías del reporte? (opcional)' : 'What would you improve about the report? (optional)'}
+                                lang={lang}
                             />
-
-                            {/* Optional textarea */}
-                            <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-2">
-                                    {lang === 'es' ? '¿Cómo podemos mejorar?' : 'How can we improve?'}
-                                    <span className="text-slate-400 font-normal ml-1">({lang === 'es' ? 'opcional' : 'optional'})</span>
-                                </label>
-                                <textarea
-                                    value={comment}
-                                    onChange={(e) => setComment(e.target.value)}
-                                    rows={3}
-                                    placeholder={lang === 'es' ? 'Contanos qué te gustaría que mejoremos...' : 'Tell us what you would like us to improve...'}
-                                    className="w-full p-3 border border-slate-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none resize-none transition"
-                                />
-                            </div>
 
                             {/* Submit */}
                             <button
@@ -208,19 +218,25 @@ export default function FeedbackModal({ reportId, deepDiveId, reportType, userId
     );
 }
 
-// ── Emoji Rating Row ─────────────────────────────────────────────────
-function RatingRow({ label, value, onChange, emojiLabels }: {
+// ── Emoji Rating Row with optional textarea ──────────────────────────
+function RatingRow({ label, sublabel, value, onChange, emojiLabels, comment, onCommentChange, commentPlaceholder, lang }: {
     label: string;
+    sublabel: string;
     value: number;
     onChange: (v: number) => void;
     emojiLabels: string[];
+    comment: string;
+    onCommentChange: (v: string) => void;
+    commentPlaceholder: string;
+    lang: string;
 }) {
     const [hovered, setHovered] = useState(0);
 
     return (
         <div>
-            <p className="text-sm font-bold text-slate-700 mb-2">{label}</p>
-            <div className="flex items-center gap-3">
+            <p className="text-sm font-bold text-slate-700 mb-0.5">{label}</p>
+            <p className="text-xs text-slate-400 mb-3">{sublabel}</p>
+            <div className="flex items-center gap-3 mb-3">
                 {EMOJIS.map((emoji, idx) => {
                     const rating = idx + 1;
                     const isActive = value === rating;
@@ -250,6 +266,16 @@ function RatingRow({ label, value, onChange, emojiLabels }: {
                     );
                 })}
             </div>
+            {/* Show textarea when a rating is selected */}
+            {value > 0 && (
+                <textarea
+                    value={comment}
+                    onChange={(e) => onCommentChange(e.target.value)}
+                    rows={2}
+                    placeholder={commentPlaceholder}
+                    className="w-full mt-4 p-3 border border-slate-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none resize-none transition"
+                />
+            )}
         </div>
     );
 }

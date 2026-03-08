@@ -61,7 +61,7 @@ export default function SuperAdminDashboard() {
                 supabase.from('system_logs').select('*').order('created_at', { ascending: false }).limit(500),
                 supabase.from('system_settings').select('*').eq('id', 1).single(),
                 supabase.from('product_analyses').select('id, business_report_id, product_name, status, is_paid, created_at, product_input_data, business_reports!product_analyses_business_report_id_fkey(user_id, business_name)'),
-                supabase.from('report_feedback').select('*').order('created_at', { ascending: false })
+                supabase.from('report_feedback').select('*, business_reports:report_id(business_name), product_analyses:deep_dive_id(product_input_data)').order('created_at', { ascending: false })
             ]);
 
             if (profilesRes.error) throw new Error("Fallo al cargar usuarios: " + profilesRes.error.message);
@@ -1092,33 +1092,71 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
                                         <tr>
                                             <th className="px-4 py-3">Fecha</th>
                                             <th className="px-4 py-3">Usuario</th>
-                                            <th className="px-4 py-3">Tipo</th>
+                                            <th className="px-4 py-3">Informe</th>
                                             <th className="px-4 py-3 text-center">General</th>
                                             <th className="px-4 py-3 text-center">Onboarding</th>
                                             <th className="px-4 py-3 text-center">Calidad</th>
-                                            <th className="px-4 py-3">Comentario</th>
+                                            <th className="px-4 py-3">Comentarios</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
                                         {rawFeedback.map((fb: any) => {
                                             const profile = rawProfiles.find(p => p.id === fb.user_id);
                                             const emojis = ['😡', '😕', '😐', '🙂', '🤩'];
+
+                                            // Get report name and link
+                                            let reportName = '—';
+                                            let reportLink = '';
+                                            if (fb.report_type === 'business' && fb.business_reports) {
+                                                reportName = fb.business_reports.business_name || 'Análisis';
+                                                reportLink = `/dashboard/report/${fb.report_id}`;
+                                            } else if (fb.report_type === 'deepdive' && fb.product_analyses) {
+                                                reportName = (fb.product_analyses.product_input_data as any)?.productName || 'Deep Dive';
+                                                reportLink = `/deep-dive/report/${fb.deep_dive_id}`;
+                                            }
+
+                                            const comments = [
+                                                fb.comment_general && { cat: 'General', text: fb.comment_general },
+                                                fb.comment_onboarding && { cat: 'Onboarding', text: fb.comment_onboarding },
+                                                fb.comment_quality && { cat: 'Calidad', text: fb.comment_quality },
+                                            ].filter(Boolean);
+
                                             return (
-                                                <tr key={fb.id} className="hover:bg-slate-50">
+                                                <tr key={fb.id} className="hover:bg-slate-50 align-top">
                                                     <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{formatDate(fb.created_at)}</td>
                                                     <td className="px-4 py-3">
                                                         <p className="text-sm font-medium text-slate-900">{profile?.full_name || 'Sin nombre'}</p>
                                                         <p className="text-xs text-slate-400">{profile?.email || fb.user_id.slice(0, 8)}</p>
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                        <span className={`text-xs font-bold px-2 py-1 rounded ${fb.report_type === 'business' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}`}>
+                                                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${fb.report_type === 'business' ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'}`}>
                                                             {fb.report_type === 'business' ? 'Análisis' : 'Deep Dive'}
                                                         </span>
+                                                        {reportLink ? (
+                                                            <a href={reportLink} target="_blank" rel="noopener noreferrer" className="block text-sm font-semibold text-indigo-600 hover:underline mt-1 max-w-[160px] truncate" title={reportName}>
+                                                                {reportName}
+                                                            </a>
+                                                        ) : (
+                                                            <p className="text-sm text-slate-500 mt-1">{reportName}</p>
+                                                        )}
                                                     </td>
                                                     <td className="px-4 py-3 text-center text-2xl">{emojis[fb.rating_general - 1]}</td>
                                                     <td className="px-4 py-3 text-center text-2xl">{emojis[fb.rating_onboarding - 1]}</td>
                                                     <td className="px-4 py-3 text-center text-2xl">{emojis[fb.rating_quality - 1]}</td>
-                                                    <td className="px-4 py-3 text-sm text-slate-600 max-w-xs truncate">{fb.comment || <span className="text-slate-300 italic">—</span>}</td>
+                                                    <td className="px-4 py-3 max-w-xs">
+                                                        {comments.length > 0 ? (
+                                                            <div className="space-y-1">
+                                                                {(comments as { cat: string; text: string }[]).map((c, i) => (
+                                                                    <div key={i}>
+                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase">{c.cat}:</span>
+                                                                        <p className="text-xs text-slate-600 leading-snug">{c.text}</p>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-slate-300 italic text-sm">—</span>
+                                                        )}
+                                                    </td>
                                                 </tr>
                                             );
                                         })}
