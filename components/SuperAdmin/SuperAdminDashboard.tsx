@@ -254,9 +254,18 @@ export default function SuperAdminDashboard() {
             const userPayments = rawPayments.filter(p => p.user_id === u.id && p.status === 'succeeded');
             const totalRevenue = userPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
+            // Deep Dives: match via the joined business_reports.user_id or via parent report
+            const userDeepDives = rawDeepDives.filter(dd => {
+                const ddUserId = (dd.business_reports as any)?.user_id;
+                if (ddUserId) return ddUserId === u.id;
+                const parentReport = rawReports.find(r => r.id === dd.business_report_id);
+                return parentReport?.user_id === u.id;
+            });
+
             return {
                 ...u,
                 reports: userReports,
+                deepDives: userDeepDives,
                 payments: userPayments,
                 totalRevenue
             };
@@ -270,7 +279,7 @@ export default function SuperAdminDashboard() {
             usersAggregated: usersMap.filter(byDate),
             allUsersAggregated: usersMap // We always keep the list ready regardless of join date for the table
         };
-    }, [rawProfiles, rawReports, rawPayments, rawLogs, dateFilter]);
+    }, [rawProfiles, rawReports, rawPayments, rawLogs, rawDeepDives, dateFilter]);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('es-AR', {
@@ -372,7 +381,7 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-6 mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                             <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">PAGOS TOTALES</p>
                             <p className="text-xl font-bold text-emerald-600">{formatCurrency(selectedUser.totalRevenue)}</p>
@@ -384,6 +393,11 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                             <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">REPORTES PAGADOS</p>
                             <p className="text-xl font-bold text-slate-900">{selectedUser.reports.filter((r: any) => r.is_paid).length}</p>
+                        </div>
+                        <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                            <p className="text-xs text-purple-600 uppercase font-bold tracking-wider">DEEP DIVES</p>
+                            <p className="text-xl font-bold text-purple-700">{selectedUser.deepDives?.length || 0}</p>
+                            <p className="text-xs text-purple-400 mt-1">{selectedUser.deepDives?.filter((dd: any) => dd.is_paid).length || 0} pagos</p>
                         </div>
                     </div>
 
@@ -441,6 +455,38 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
                                 </div>
                             ))}
                         </div>
+                    )}
+
+                    {/* Deep Dives Section */}
+                    {selectedUser.deepDives && selectedUser.deepDives.length > 0 && (
+                        <>
+                            <h3 className="font-bold text-lg mb-4 mt-8 text-purple-800 flex items-center gap-2">
+                                <Cpu size={20} /> Deep Dives ({selectedUser.deepDives.length})
+                            </h3>
+                            <div className="space-y-4">
+                                {selectedUser.deepDives.map((dd: any) => {
+                                    const productName = dd.product_name || (dd.product_input_data as any)?.productName || 'Deep Dive';
+                                    const parentBusiness = (dd.business_reports as any)?.business_name || rawReports.find((r: any) => r.id === dd.business_report_id)?.business_name || '';
+                                    return (
+                                        <div key={dd.id} className="border border-purple-200 rounded-xl p-5 hover:border-purple-400 transition bg-purple-50/30">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <h4 className="font-bold text-slate-900 text-lg">{productName}</h4>
+                                                    {parentBusiness && <p className="text-sm text-slate-500">Negocio: {parentBusiness}</p>}
+                                                    <p className="text-xs text-slate-500">{formatDate(dd.created_at)}</p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="bg-purple-100 text-purple-700 text-[10px] uppercase font-bold px-2 py-1 rounded">Deep Dive</span>
+                                                    {dd.status === 'completed' && <span className={`text-xs px-2 py-1 rounded font-bold ${dd.is_paid ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{dd.is_paid ? 'PAGO' : 'GRATIS'}</span>}
+                                                    {dd.status === 'failed' && <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold">FALLÓ IA</span>}
+                                                    {dd.status === 'analyzing' && <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-bold">ANALIZANDO</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </>
                     )}
                 </div>
                 {/* Modal for Onboarding Data */}
@@ -635,6 +681,7 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
                                     <th className="px-6 py-4">Fecha Alta</th>
                                     <th className="px-6 py-4 text-center">Status Onboarding</th>
                                     <th className="px-6 py-4 text-center">Reportes Pagos</th>
+                                    <th className="px-6 py-4 text-center">Deep Dives</th>
                                     <th className="px-6 py-4 text-right">LTV (Ingresos)</th>
                                 </tr>
                             </thead>
@@ -663,6 +710,7 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
                                             <td className="px-6 py-4 text-sm text-slate-500">{formatDate(u.created_at).split(',')[0]}</td>
                                             <td className="px-6 py-4 text-center">{statusBadge}</td>
                                             <td className="px-6 py-4 text-sm font-bold text-slate-700 text-center">{paidReps} <span className="text-slate-400 font-normal">/ {createdReports}</span></td>
+                                            <td className="px-6 py-4 text-sm font-bold text-purple-600 text-center">{u.deepDives?.length || 0}</td>
                                             <td className="px-6 py-4 text-sm font-bold text-emerald-600 text-right">{formatCurrency(u.totalRevenue)}</td>
                                         </tr>
                                     );
