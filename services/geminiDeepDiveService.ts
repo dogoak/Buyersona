@@ -8,7 +8,7 @@ export const analyzeProductDeepDive = async (
     productInput: DeepDiveInput,
     lang: Language
 ): Promise<{ result: DeepDiveResult, costUsd: number }> => {
-    const modelName = 'gemini-3-pro-preview';
+    const modelName = 'gemini-3.1-pro-preview';
     const inputTokenPriceUsd = 1.25 / 1000000;
     const outputTokenPriceUsd = 5.00 / 1000000;
 
@@ -551,7 +551,7 @@ export const preAnalyzeProduct = async (
     images: string[],
     lang: Language
 ): Promise<ProductPreAnalysis> => {
-    const modelName = 'gemini-3-pro-preview';
+    const modelName = 'gemini-3.1-pro-preview';
     const languageInstruction = lang === 'es'
         ? "The output JSON content MUST be in SPANISH."
         : "The output JSON content MUST be in ENGLISH.";

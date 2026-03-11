@@ -57,8 +57,8 @@ export const analyzeWebsite = async (url: string, lang: Language): Promise<{ res
 };
 
 export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language): Promise<{ result: StrategicAnalysis, costUsd: number }> => {
-    const modelName = 'gemini-3-pro-preview';
-    // Pricing for gemini-3-pro-preview (approx fallback to general Pro prices): Input = $1.25 / 1M, Output = $5.00 / 1M
+    const modelName = 'gemini-3.1-pro-preview';
+    // Pricing for gemini-3.1-pro-preview (approx fallback to general Pro prices): Input = $1.25 / 1M, Output = $5.00 / 1M
     const inputTokenPriceUsd = 1.25 / 1000000;
     const outputTokenPriceUsd = 5.00 / 1000000;
 
