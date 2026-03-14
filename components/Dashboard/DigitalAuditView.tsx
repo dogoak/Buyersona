@@ -131,6 +131,16 @@ const CollapsibleSection = ({ title, icon, children, defaultOpen = false, badge 
 };
 
 // Safe defaults for DigitalAuditResult — Gemini's free-form JSON may miss any field
+// Helper: safely parse a JSON string field, returning the parsed object or the original value if already an object
+const safeParse = (val: any): any => {
+    if (!val) return null;
+    if (typeof val === 'object') return val; // already parsed (e.g. from saved DB data)
+    if (typeof val === 'string') {
+        try { return JSON.parse(val); } catch { return null; }
+    }
+    return null;
+};
+
 const safeResult = (raw: any): DigitalAuditResult => {
     const r = raw || {};
     const wt = r.webTechnical || {};
@@ -139,6 +149,16 @@ const safeResult = (raw: any): DigitalAuditResult => {
     const rep = r.reputationAnalysis || {};
     const email = r.emailCrmAssessment || {};
     const crawl = ai.aiCrawlerAccess || {};
+
+    // Parse extended sections (these come as JSON strings from Gemini schema)
+    r.socialProof = safeParse(r.socialProof);
+    r.funnelAnalysis = safeParse(r.funnelAnalysis);
+    r.contentIdentityAudit = safeParse(r.contentIdentityAudit);
+    r.competitorComparison = safeParse(r.competitorComparison);
+    r.channelStrategies = safeParse(r.channelStrategies);
+    r.adStrategy = safeParse(r.adStrategy);
+    r.influencerStrategy = safeParse(r.influencerStrategy);
+    r.marketplaceAnalysis = safeParse(r.marketplaceAnalysis);
 
     return {
         ...r,

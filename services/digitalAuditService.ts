@@ -1798,11 +1798,14 @@ export const analyzeDigitalAudit = async (
     recommendations dentro de emailCrmAssessment DEBE ser un array de STRINGS (no objetos).
     roadmap DEBE ser un ARRAY de 3 objetos (no un objeto con days30/days60/days90).
     moneyOnTheTable DEBE ser un ARRAY de objetos con {area, description, estimatedLoss}.
-    channelStrategies DEBE ser un ARRAY (una entrada por red social activa).
-    socialProof.socialMentions DEBE ser un ARRAY.
-    funnelAnalysis.stages DEBE ser un ARRAY de 3-4 etapas.
-    contentIdentityAudit.contentMix DEBE ser un ARRAY.
+
+    SECCIONES EXTENDIDAS (socialProof, funnelAnalysis, contentIdentityAudit, competitorComparison,
+    channelStrategies, adStrategy, influencerStrategy, marketplaceAnalysis):
+    Cada una DEBE ser un STRING que contenga JSON válido. Por ejemplo:
+    socialProof: "{\"trustScore\":75,\"overallSentiment\":\"Positivo\",\"googleReviewsAnalysis\":{\"averageRating\":4.2,\"totalReviews\":50,\"positiveThemes\":[\"buen servicio\"],\"negativeThemes\":[\"demoras\"],\"samplePositive\":\"...\",\"sampleNegative\":\"...\"},\"socialMentions\":[],\"recommendations\":[\"...\"]}"
+    channelStrategies: "[{\"channel\":\"Instagram\",\"currentStatus\":\"Activo\",\"priority\":\"Alta\",\"quickWins\":[\"...\"],\"contentIdeas\":[\"...\"],\"postingFrequency\":\"3x/semana\",\"kpis\":[\"...\"]}]"
     `;
+
 
     // WARNING: We must call Gemini directly here because the proxy edge function has a 10s timeout
     // which this massive payload easily exceeds during the 'thinking' phase.
@@ -1944,117 +1947,16 @@ function buildAuditResponseSchema() {
                 type: Type.ARRAY,
                 items: { type: Type.OBJECT, properties: { phase: { type: Type.STRING }, focus: { type: Type.STRING }, actions: { type: Type.ARRAY, items: { type: Type.STRING } }, kpis: { type: Type.ARRAY, items: { type: Type.STRING } } } }
             },
-            // Extended sections — defined as OBJECT with flat string properties to keep schema complexity low
-            // while still forcing Gemini to generate these sections
-            socialProof: {
-                type: Type.OBJECT,
-                properties: {
-                    trustScore: { type: Type.NUMBER },
-                    overallSentiment: { type: Type.STRING },
-                    googleReviewsAnalysis: { type: Type.OBJECT, properties: {
-                        averageRating: { type: Type.NUMBER },
-                        totalReviews: { type: Type.NUMBER },
-                        positiveThemes: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        negativeThemes: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        samplePositive: { type: Type.STRING },
-                        sampleNegative: { type: Type.STRING }
-                    }},
-                    socialMentions: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
-                        platform: { type: Type.STRING }, sentiment: { type: Type.STRING }, text: { type: Type.STRING }
-                    }}},
-                    recommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
-                }
-            },
-            funnelAnalysis: {
-                type: Type.OBJECT,
-                properties: {
-                    biggestLeak: { type: Type.STRING },
-                    stages: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
-                        name: { type: Type.STRING }, status: { type: Type.STRING }, description: { type: Type.STRING }
-                    }}},
-                    conversionPaths: { type: Type.ARRAY, items: { type: Type.STRING } }
-                }
-            },
-            contentIdentityAudit: {
-                type: Type.OBJECT,
-                properties: {
-                    visualScore: { type: Type.NUMBER },
-                    isTransactionalOnly: { type: Type.BOOLEAN },
-                    toneOfVoice: { type: Type.STRING },
-                    brandConsistency: { type: Type.STRING },
-                    contentMix: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
-                        type: { type: Type.STRING }, percentage: { type: Type.NUMBER }
-                    }}},
-                    valueContentRatio: { type: Type.STRING },
-                    recommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
-                }
-            },
-            competitorComparison: {
-                type: Type.OBJECT,
-                properties: {
-                    platforms: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
-                        platform: { type: Type.STRING },
-                        yourMetric: { type: Type.STRING },
-                        competitorAvg: { type: Type.STRING },
-                        verdict: { type: Type.STRING }
-                    }}}
-                }
-            },
-            channelStrategies: {
-                type: Type.ARRAY,
-                items: { type: Type.OBJECT, properties: {
-                    channel: { type: Type.STRING },
-                    currentStatus: { type: Type.STRING },
-                    priority: { type: Type.STRING },
-                    quickWins: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    contentIdeas: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    postingFrequency: { type: Type.STRING },
-                    kpis: { type: Type.ARRAY, items: { type: Type.STRING } }
-                }}
-            },
-            adStrategy: {
-                type: Type.OBJECT,
-                properties: {
-                    currentAdSpend: { type: Type.STRING },
-                    competitorAdActivity: { type: Type.STRING },
-                    recommendedBudget: { type: Type.STRING },
-                    recommendedPlatforms: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    adTypes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
-                        platform: { type: Type.STRING },
-                        format: { type: Type.STRING },
-                        objective: { type: Type.STRING },
-                        estimatedCost: { type: Type.STRING }
-                    }}}
-                }
-            },
-            influencerStrategy: {
-                type: Type.OBJECT,
-                properties: {
-                    recommendedTier: { type: Type.STRING },
-                    estimatedCost: { type: Type.STRING },
-                    suggestedProfiles: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
-                        name: { type: Type.STRING },
-                        platform: { type: Type.STRING },
-                        followers: { type: Type.STRING },
-                        reason: { type: Type.STRING }
-                    }}},
-                    collaborationIdeas: { type: Type.ARRAY, items: { type: Type.STRING } }
-                }
-            },
-            marketplaceAnalysis: {
-                type: Type.OBJECT,
-                properties: {
-                    platform: { type: Type.STRING },
-                    currentPresence: { type: Type.STRING },
-                    recommendation: { type: Type.STRING },
-                    products: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
-                        name: { type: Type.STRING },
-                        price: { type: Type.STRING },
-                        status: { type: Type.STRING }
-                    }}},
-                    actionItems: { type: Type.ARRAY, items: { type: Type.STRING } }
-                }
-            }
+            // Extended sections — STRING type to avoid exceeding Gemini's schema complexity limit
+            // Gemini will return JSON as a string, UI parses it with JSON.parse()
+            socialProof: { type: Type.STRING },
+            funnelAnalysis: { type: Type.STRING },
+            contentIdentityAudit: { type: Type.STRING },
+            competitorComparison: { type: Type.STRING },
+            channelStrategies: { type: Type.STRING },
+            adStrategy: { type: Type.STRING },
+            influencerStrategy: { type: Type.STRING },
+            marketplaceAnalysis: { type: Type.STRING }
         },
         required: [
             'snapshot', 'findings', 'webTechnical', 'seoAnalysis', 'aiReadiness', 'socialMediaAudit', 
