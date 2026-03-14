@@ -232,7 +232,7 @@ serve(async (req) => {
             const adLibraryUrl = `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&q=${encodeURIComponent(query)}&search_type=keyword_unordered`;
             
             try {
-                const data = await callApify('apify~facebook-ads-library-scraper', { startUrls: [{ url: adLibraryUrl }], maxItems: 10 }, 90);
+                const data = await callApify('apify~facebook-ads-scraper', { startUrls: [{ url: adLibraryUrl }], maxItems: 10 }, 90);
                 if (!data || data.length === 0) {
                     return new Response(JSON.stringify({ success: true, result: { isRunningAds: false, totalAds: 0, ads: [] } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
@@ -269,7 +269,7 @@ serve(async (req) => {
                 } else {
                     input.advertiserName = advertiserName;
                 }
-                const data = await callApify('apify~google-ads-transparency-center-scraper', input, 90);
+                const data = await callApify('alkausari_mujahid~google-ads-transparency-scraper', input, 90);
                 if (!data || data.length === 0) {
                     return new Response(JSON.stringify({ success: true, result: { isRunningAds: false, totalAds: 0, ads: [] } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
@@ -298,7 +298,7 @@ serve(async (req) => {
             const { keyword, countryCode } = payload;
             if (!keyword) throw new Error('keyword required');
             try {
-                const data = await callApify('trikeapps~tiktok-creative-center-scraper', {
+                const data = await callApify('doliz~tiktok-creative-center-scraper', {
                     countryCode: countryCode || 'AR',
                     keyword: keyword,
                     limit: 10,
@@ -332,7 +332,7 @@ serve(async (req) => {
             const { advertiserName } = payload;
             if (!advertiserName) throw new Error('advertiserName required');
             try {
-                const data = await callApify('apify~linkedin-ads-library-scraper', {
+                const data = await callApify('silva95gustavo~linkedin-ad-library-scraper', {
                     advertiserName: advertiserName,
                     maxItems: 10
                 }, 90);
@@ -368,7 +368,7 @@ serve(async (req) => {
             const mlUrl = `https://listado.mercadolibre.com.ar/${encodeURIComponent(query).replace(/%20/g, '-')}`;
             
             try {
-                const data = await callApify('curious_coder~mercadolibre-scraper', {
+                const data = await callApify('saswave~mercadolibre-product-scraper', {
                     startUrls: [{ url: mlUrl }],
                     maxItems: 10
                 }, 90);
