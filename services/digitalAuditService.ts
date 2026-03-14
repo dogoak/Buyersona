@@ -1216,21 +1216,22 @@ export const analyzeDigitalAudit = async (
     let metaAdsContext = '';
     if (input.metaAdsData) {
         const ma = input.metaAdsData;
+        const searchedSource = (ma as any).searchedUrl ? `\n    📌 FUENTE: Buscado en ${(ma as any).searchedUrl}` : '';
         if (ma.isRunningAds) {
             metaAdsContext = `
     ═══════════════════════════════════════════
-    DATOS REALES DE META ADS LIBRARY (VERIFICADOS VÍA API):
+    DATOS REALES DE META ADS LIBRARY (VERIFICADOS VÍA API):${searchedSource}
     ═══════════════════════════════════════════
     - ¿Está pautando en Meta? SÍ ✅
     - Total de anuncios activos: ${ma.totalAds}
     - Detalle de anuncios:
-    ${ma.ads.slice(0, 5).map((ad, i) => `    Anuncio ${i + 1}: "${ad.body?.slice(0, 100) || ad.title || 'Sin texto'}" | CTA: ${ad.ctaText || 'N/A'} | Desde: ${ad.startedRunning || 'N/A'} | Plataformas: ${ad.platforms?.join(', ') || 'Meta'}`).join('\n')}
-    ESTE DATO ES CLAVE: el cliente invierte en publicidad paga.
+    ${ma.ads.slice(0, 5).map((ad, i) => `    Anuncio ${i + 1}: Página: "${ad.pageName || 'N/A'}" | "${ad.body?.slice(0, 100) || ad.title || 'Sin texto'}" | CTA: ${ad.ctaText || 'N/A'} | Desde: ${ad.startedRunning || 'N/A'} | Plataformas: ${ad.platforms?.join(', ') || 'Meta'}`).join('\n')}
+    CITÁ EL NOMBRE DE LA PÁGINA DEL ANUNCIO. Si el pageName no coincide con el negocio analizado, MENCIONALO.
             `;
         } else {
             metaAdsContext = `
     ═══════════════════════════════════════════
-    DATOS REALES DE META ADS LIBRARY (VERIFICADOS VÍA API):
+    DATOS REALES DE META ADS LIBRARY (VERIFICADOS VÍA API):${searchedSource}
     ═══════════════════════════════════════════
     - ¿Está pautando en Meta? NO ❌
     - No se encontraron anuncios activos en Facebook/Instagram Ads.
@@ -1271,19 +1272,22 @@ export const analyzeDigitalAudit = async (
     // Ad Intelligence contexts
     let googleAdsContext = '';
     if (googleAdsData) {
+        const searchedDomain = googleAdsData.searchedDomain ? `\n    📌 FUENTE: Dominio buscado: ${googleAdsData.searchedDomain}` : '';
         if (googleAdsData.isRunningAds) {
             googleAdsContext = `
     ═══════════════════════════════════════════
-    GOOGLE ADS — DATOS REALES (Transparency Center):
+    GOOGLE ADS — DATOS REALES (Transparency Center):${searchedDomain}
     ═══════════════════════════════════════════
     Anunciante: ${googleAdsData.advertiserName}
+    Verificación: ${googleAdsData.verificationStatus || 'N/A'}
     Total anuncios encontrados: ${googleAdsData.totalAds}
     ${googleAdsData.ads?.slice(0, 5).map((a: any, i: number) => `    ${i + 1}. Formato: ${a.format} | Plataformas: ${a.platforms?.join(', ') || 'N/A'} | Desde: ${a.firstShown} | Contenido: "${(a.content || '').slice(0, 100)}"`).join('\n')}
     PAUTA EN GOOGLE ✅ — Esto indica inversión activa en publicidad digital.
             `;
         } else {
             googleAdsContext = `
-    GOOGLE ADS: No se encontraron anuncios activos en Google Ads Transparency Center. NO pauta en Google ❌
+    GOOGLE ADS: No se encontraron anuncios activos en Google Ads Transparency Center.${searchedDomain}
+    NO pauta en Google ❌
             `;
         }
     }

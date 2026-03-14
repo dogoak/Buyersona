@@ -221,23 +221,31 @@ serve(async (req) => {
             return new Response(JSON.stringify({ success: true, result }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        // ── Meta / Facebook Ads Library ── (FIXED: correct input format)
+        // ── Meta Ads Library ── (NEW)
         if (action === 'scrape_meta_ads') {
             const { pageUrl, searchQuery } = payload;
             if (!pageUrl && !searchQuery) throw new Error('pageUrl or searchQuery required');
             
-            // The actor accepts either facebook page URLs directly or Ad Library search URLs
-            // Construct a proper Ad Library search URL
-            const query = searchQuery || pageUrl;
-            const adLibraryUrl = `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&q=${encodeURIComponent(query)}&search_type=keyword_unordered`;
+            // PRECISION FIX: If we have a Facebook page URL, use it directly as startUrl
+            // This ensures we only get ads from THIS specific page, not random keyword matches
+            let startUrl: string;
+            if (pageUrl && (pageUrl.includes('facebook.com/') || pageUrl.includes('fb.com/'))) {
+                // Direct Facebook page URL → most precise
+                startUrl = pageUrl;
+            } else {
+                // Fallback: keyword search in Ad Library (less precise)
+                const query = searchQuery || pageUrl;
+                startUrl = `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&q=${encodeURIComponent(query)}&search_type=keyword_unordered`;
+            }
             
             try {
-                const data = await callApify('apify~facebook-ads-scraper', { startUrls: [{ url: adLibraryUrl }], maxItems: 10 }, 90);
+                const data = await callApify('apify~facebook-ads-scraper', { startUrls: [{ url: startUrl }], maxItems: 10 }, 90);
                 if (!data || data.length === 0) {
-                    return new Response(JSON.stringify({ success: true, result: { isRunningAds: false, totalAds: 0, ads: [] } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                    return new Response(JSON.stringify({ success: true, result: { isRunningAds: false, totalAds: 0, ads: [], searchedUrl: startUrl } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
                 const result = {
                     isRunningAds: true, totalAds: data.length,
+                    searchedUrl: startUrl,
                     ads: data.slice(0, 10).map((ad: any) => ({
                         adId: ad.adArchiveID || ad.ad_archive_id || ad.id || '',
                         pageName: ad.pageName || ad.page_name || '',
@@ -252,7 +260,6 @@ serve(async (req) => {
                 };
                 return new Response(JSON.stringify({ success: true, result }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             } catch (e: any) {
-                // If actor fails, return "no ads" instead of crashing
                 console.error('Meta Ads scraper error:', e.message);
                 return new Response(JSON.stringify({ success: true, result: { isRunningAds: false, totalAds: 0, ads: [], error: e.message } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
@@ -263,27 +270,38 @@ serve(async (req) => {
             const { advertiserName, domain } = payload;
             if (!advertiserName && !domain) throw new Error('advertiserName or domain required');
             try {
-                const input: any = { maxItems: 10 };
-                if (domain) {
-                    input.url = `https://adstransparency.google.com/?domain=${encodeURIComponent(domain)}`;
-                } else {
-                    input.advertiserName = advertiserName;
+                // PRECISION FIX: Actor requires `domains` array (per official docs)
+                // Extract clean domain from whatever we receive
+                let cleanDomain = domain || '';
+                if (!cleanDomain && advertiserName) {
+                    // If no domain, we can't use this actor precisely
+                    // Return empty rather than incorrect results
+                    return new Response(JSON.stringify({ success: true, result: { isRunningAds: false, totalAds: 0, ads: [], note: 'No domain provided for precise lookup' } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
-                const data = await callApify('alkausari_mujahid~google-ads-transparency-scraper', input, 90);
+                // Clean the domain (remove protocol, trailing slash, www)
+                cleanDomain = cleanDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+                
+                const data = await callApify('alkausari_mujahid~google-ads-transparency-scraper', {
+                    domains: [cleanDomain]
+                }, 90);
                 if (!data || data.length === 0) {
-                    return new Response(JSON.stringify({ success: true, result: { isRunningAds: false, totalAds: 0, ads: [] } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                    return new Response(JSON.stringify({ success: true, result: { isRunningAds: false, totalAds: 0, ads: [], searchedDomain: cleanDomain } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
+                const first = data[0];
                 const result = {
-                    isRunningAds: true, totalAds: data.length,
-                    advertiserName: data[0]?.advertiserName || advertiserName || '',
-                    ads: data.slice(0, 10).map((ad: any) => ({
-                        format: ad.format || ad.adFormat || 'unknown',
-                        content: ad.content || ad.text || ad.body || '',
-                        firstShown: ad.firstShown || ad.firstSeenDate || '',
-                        lastShown: ad.lastShown || ad.lastSeenDate || '',
+                    isRunningAds: first?.hasAds === true || first?.adsFound === true || data.length > 0,
+                    totalAds: first?.totalAds || first?.adsCount || data.length,
+                    searchedDomain: cleanDomain,
+                    advertiserName: first?.advertiserName || first?.domain || advertiserName || '',
+                    verificationStatus: first?.verificationStatus || '',
+                    ads: (first?.ads || data).slice(0, 10).map((ad: any) => ({
+                        format: ad.format || ad.adFormat || ad.type || 'unknown',
+                        content: ad.content || ad.text || ad.body || ad.headline || '',
+                        firstShown: ad.firstShown || ad.firstSeenDate || ad.startDate || '',
+                        lastShown: ad.lastShown || ad.lastSeenDate || ad.endDate || '',
                         platforms: ad.platforms || ad.surfaces || [],
-                        regions: ad.regions || [],
-                        previewUrl: ad.previewImageUrl || ad.imageUrl || ''
+                        regions: ad.regions || ad.countries || [],
+                        previewUrl: ad.previewImageUrl || ad.imageUrl || ad.screenshotUrl || ''
                     }))
                 };
                 return new Response(JSON.stringify({ success: true, result }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
