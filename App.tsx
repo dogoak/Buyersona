@@ -12,7 +12,10 @@ import PaymentResult from './components/Checkout/PaymentResult';
 import ResumeCheckout from './components/Checkout/ResumeCheckout';
 import DeepDivePage from './components/DeepDivePage';
 import DeepDiveCheckout from './components/Checkout/DeepDiveCheckout';
+import DigitalAuditCheckout from './components/Checkout/DigitalAuditCheckout';
 import DeepDiveView from './components/Dashboard/DeepDiveView';
+import DigitalAuditPage from './components/DigitalAuditPage';
+import DigitalAuditView from './components/Dashboard/DigitalAuditView';
 import PrivacyPolicy from './components/Legal/PrivacyPolicy';
 import TermsOfService from './components/Legal/TermsOfService';
 import Onboarding from './components/Onboarding';
@@ -352,6 +355,25 @@ function App() {
           <Route path="/deep-dive/report/:reportId" element={
             <PrivateRoute>
               <DeepDiveView />
+            </PrivateRoute>
+          } />
+
+          {/* Digital Audit Routes */}
+          <Route path="/digital-audit/new/:reportId" element={
+            <PrivateRoute>
+              <DigitalAuditPage lang={lang} setLang={setLang} />
+            </PrivateRoute>
+          } />
+
+          <Route path="/digital-audit/checkout/:auditId" element={
+            <PrivateRoute>
+              <DigitalAuditCheckout />
+            </PrivateRoute>
+          } />
+
+          <Route path="/digital-audit/report/:reportId" element={
+            <PrivateRoute>
+              <DigitalAuditView />
             </PrivateRoute>
           } />
 

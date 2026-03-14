@@ -421,6 +421,447 @@ export interface DeepDiveResult {
   quickWins?: QuickWin[];
 }
 
+// ----------------------------------------------------------------------
+// DIGITAL AUDIT TYPES
+// ----------------------------------------------------------------------
+
+export interface DigitalAuditInput {
+  websiteUrl: string;
+  instagramUrl?: string;
+  tiktokUrl?: string;
+  linkedinUrl?: string;
+  facebookUrl?: string;
+  youtubeUrl?: string;
+  xUrl?: string;
+  pinterestUrl?: string;
+  googleMapsUrl?: string;
+  marketplaces?: { platform: string; storeName: string }[];
+  businessType?: 'B2B' | 'B2C' | 'both';
+  competitors?: { name: string; website: string }[];
+  // Auto-detected data (populated by pre-scan)
+  detectedPlatform?: string;
+  detectedTools?: string[];
+  detectedSocialLinks?: string[];
+  // Pre-scan results for user confirmation
+  preScanData?: DigitalPreScanResult;
+  // Raw scraper data from web-scraper Edge Function
+  scraperData?: any;
+  // Raw Instagram data from Apify
+  instagramData?: InstagramScrapeResult;
+  // Raw Google Maps data from Apify
+  googleMapsData?: GoogleMapsScrapeResult;
+  // Raw Facebook data from Apify
+  facebookData?: FacebookScrapeResult;
+  // Raw TikTok data from Apify
+  tiktokData?: TikTokScrapeResult;
+  // Raw X (Twitter) data from Apify
+  xData?: XScrapeResult;
+  // Raw LinkedIn data from Apify
+  linkedinData?: LinkedInScrapeResult;
+  // Raw YouTube data from Apify
+  youtubeData?: YouTubeScrapeResult;
+  // Raw Pinterest data from Apify
+  pinterestData?: PinterestScrapeResult;
+  // Raw Meta Ads Library data from Apify
+  metaAdsData?: MetaAdsScrapeResult;
+  // Raw MercadoLibre data from Apify
+  mercadolibreData?: MercadoLibreScrapeResult;
+}
+
+export interface MercadoLibreScrapeResult {
+  found: boolean;
+  totalProducts: number;
+  seller: {
+    name: string;
+    reputation: string;
+    transactions: number;
+    positiveRatings: number;
+    location: string;
+  } | null;
+  products: {
+    title: string;
+    price: number;
+    currency: string;
+    condition: string;
+    soldQuantity: number;
+    availableQuantity: number;
+    freeShipping: boolean;
+    rating: number | null;
+    url: string;
+    imageUrl: string;
+  }[];
+}
+
+export interface MetaAdsScrapeResult {
+  isRunningAds: boolean;
+  totalAds: number;
+  ads: {
+    adId: string;
+    pageName: string;
+    body: string;
+    title: string;
+    ctaText: string;
+    ctaLink: string;
+    status: string;
+    startedRunning: string;
+    platforms: string[];
+  }[];
+}
+
+export interface FacebookScrapeResult {
+  pageName: string;
+  likes: number;
+  followers: number;
+  category: string;
+  about: string;
+  website?: string;
+  phone?: string;
+  address?: string;
+  latestPosts: { text: string; likes: number; comments: number; shares: number; date?: string; url?: string; imageUrl?: string }[];
+}
+
+export interface TikTokScrapeResult {
+  username: string;
+  nickname: string;
+  followers: number;
+  following?: number;
+  likes: number;
+  videos: number;
+  bio: string;
+  verified: boolean;
+  latestVideos: { description: string; views: number; likes: number; comments: number; shares: number; url: string; coverUrl?: string }[];
+}
+
+export interface GoogleMapsScrapeResult {
+  title: string;
+  rating: number;
+  reviewsCount: number;
+  address: string;
+  website?: string;
+  phone?: string;
+  reviews: { text: string; rating: number; reviewerName: string }[];
+}
+
+export interface XScrapeResult {
+  username: string;
+  name: string;
+  followers: number;
+  following: number;
+  isVerified: boolean;
+  latestTweets: { text: string; likes: number; retweets: number; replies: number; date: string; url: string }[];
+}
+
+export interface LinkedInScrapeResult {
+  name: string;
+  headline: string;
+  followers: number;
+  connections: number;
+  about: string;
+  industry: string;
+  location: string;
+  website: string;
+  isCompany: boolean;
+  employeeCount: number | null;
+  specialties: string[];
+}
+
+export interface YouTubeScrapeResult {
+  channelName: string;
+  subscribers: number;
+  totalViews: string;
+  totalVideos: number;
+  description: string;
+  joinedDate: string;
+  location: string;
+  isMonetized: boolean;
+  latestVideos: { title: string; views: number; duration: string; date: string; url: string }[];
+}
+
+export interface PinterestScrapeResult {
+  username: string;
+  fullName: string;
+  followers: number;
+  following: number;
+  pins: number;
+  boards: number;
+  latestPins: { title: string; description: string; saves: number; comments: number; url: string }[];
+}
+
+export interface InstagramScrapeResult {
+  username: string;
+  fullName: string;
+  biography: string;
+  followersCount: number;
+  followsCount: number;
+  postsCount: number;
+  isVerified: boolean;
+  isBusinessAccount: boolean;
+  businessCategoryName: string;
+  externalUrl: string;
+  latestPosts: { type: string, caption: string, likesCount: number, commentsCount: number, url: string }[];
+}
+
+export interface DigitalPreScanResult {
+  platform: string;
+  hasSSL: boolean;
+  detectedTools: string[];
+  socialLinks: { platform: string; url: string }[];
+  estimatedFollowers?: { platform: string; count: string }[];
+  googleRating?: string;
+  googleReviewCount?: string;
+}
+
+export interface DigitalSnapshot {
+  digitalMaturityScore: number; // 0-100
+  scoreBreakdown: {
+    web: number;
+    seo: number;
+    socialMedia: number;
+    reputation: number;
+    email: number;
+    aiReadiness: number;
+  };
+  followers: { platform: string; count: string; trend: string }[];
+  googleRating: string;
+  googleReviewCount: string;
+  ecommercePlatform: string;
+  activeChannels: string[];
+}
+
+export interface WebTechnicalAudit {
+  overallScore: 'good' | 'needs_work' | 'critical';
+  detectedTools: { name: string; status: string }[];
+  ssl: boolean;
+  sitemap: boolean;
+  robotsTxt: boolean;
+  pageSpeedScore: string;
+  mobileReadiness: string;
+  conversionReadyAudit: {
+    hasClearCTAs: boolean;
+    hasLeadCapture: boolean;
+    hasWhatsAppButton: boolean;
+    hasAbandonedCartRecovery: boolean;
+    details: string;
+  };
+  schemaMarkup: { detected: boolean; types: string[]; recommendation: string };
+}
+
+export interface SeoAnalysis {
+  overallScore: 'good' | 'needs_work' | 'critical';
+  brokenUrls: string[];
+  blogStatus: string;
+  metaTagsStatus: string;
+  keywordGapAnalysis: string;
+  contentAuthorityScore: string;
+  productNamingIssues: { currentName: string; problem: string; suggestedName: string }[];
+  localSeoCheck: {
+    googleMyBusinessOptimized: boolean;
+    napConsistency: string;
+    localReviewSummary: string;
+  };
+}
+
+export interface AiReadinessAudit {
+  overallScore: 'ready' | 'partial' | 'invisible';
+  structuredData: { detected: boolean; types: string[]; recommendation: string };
+  qaContent: { hasQaFormat: boolean; recommendation: string };
+  eeatScore: string;
+  llmsTxt: { exists: boolean; recommendation: string };
+  aiCrawlerAccess: { blocked: string[]; allowed: string[]; recommendation: string };
+  atomicAnswers: { score: string; recommendation: string };
+  entityConsistency: { score: string; issues: string[] };
+  summary: string;
+}
+
+export interface SocialMediaChannelAudit {
+  platform: string;
+  status: 'strong' | 'moderate' | 'weak' | 'absent';
+  followers: string;
+  engagementRate: string;
+  postingFrequency: string;
+  topPosts: { description: string; whyItWorked: string }[];
+  contentMix: { educational: string; entertainment: string; sales: string };
+  hashtagStrategy: string;
+  bestPostingTimes: string;
+  recommendation: string;
+  personaCrossRef?: string;
+}
+
+export interface ReputationAnalysis {
+  overallSentiment: 'positive' | 'mixed' | 'negative';
+  googleReviews: {
+    rating: string;
+    count: string;
+    trend: string;
+    recurringThemesPositive: string[];
+    recurringThemesNegative: string[];
+  };
+  responseRate: string;
+  brandMentions: { source: string; sentiment: string; detail: string }[];
+}
+
+export interface CompetitorDigitalBenchmark {
+  competitorName: string;
+  website: string;
+  whatTheyDoBetter: string;
+  whatClientDoesBetter: string;
+  contentStrategyGap: string;
+  keyTakeaway: string;
+}
+
+export interface EmailCrmAssessment {
+  hasEmailCapture: boolean;
+  emailPlatformDetected: string;
+  leadNurturingScore: 'active' | 'basic' | 'absent';
+  crmMaturity: string;
+  recommendations: string[];
+}
+
+export interface PrioritizedOpportunity {
+  title: string;
+  category: 'Quick Win' | 'Strategic Investment' | 'Critical Fix';
+  impact: 'high' | 'medium' | 'low';
+  effort: string;
+  estimatedRoi: string;
+  description: string;
+  howTo: string;
+}
+
+export interface DigitalRisk {
+  risk: string;
+  severity: 'high' | 'medium' | 'low';
+  detail: string;
+  mitigation: string;
+}
+
+export interface RoadmapMilestone {
+  phase: '30_days' | '60_days' | '90_days';
+  focus: string;
+  actions: string[];
+  kpis: string[];
+}
+
+export interface IndustryLeader {
+  name: string;
+  platform: string;
+  profileUrl: string;
+  followers: string;
+  engagementRate: string;
+  strategy: string;
+  topPosts: { description: string; url: string; engagement: string }[];
+  lessonsForUser: string;
+}
+
+export interface CriticalFinding {
+  title: string;
+  area: string; // web_ux, seo, social_media, reputation, conversion, naming, content, technical
+  severity: 'critical' | 'warning' | 'opportunity';
+  diagnosis: string;
+  whyItMatters: string;
+  moneyImpact: string;
+  fix: string;
+  effort: 'quick_fix' | 'medium' | 'major';
+}
+
+export interface DigitalAuditResult {
+  snapshot: DigitalSnapshot;
+  findings: CriticalFinding[];
+  webTechnical: WebTechnicalAudit;
+  seoAnalysis: SeoAnalysis;
+  aiReadiness: AiReadinessAudit;
+  socialMediaAudit: SocialMediaChannelAudit[];
+  reputationAnalysis: ReputationAnalysis;
+  competitorBenchmark: CompetitorDigitalBenchmark[];
+  emailCrmAssessment: EmailCrmAssessment;
+  opportunities: PrioritizedOpportunity[];
+  risks: DigitalRisk[];
+  industryLeaders: IndustryLeader[];
+  digitalHealthGrade: 'A' | 'B' | 'C' | 'D' | 'F';
+  executiveSummary: string;
+  moneyOnTheTable: string;
+  roadmap: RoadmapMilestone[];
+  // ── Growth Plan Fields (new) ──
+  competitorComparison?: {
+    platforms: {
+      platform: string;
+      userMetrics: { followers: number; engagement: string; postFreq: string };
+      competitors: { name: string; followers: number; engagement: string; postFreq: string }[];
+    }[];
+  };
+  channelStrategies?: {
+    platform: string;
+    currentState: string;
+    strategy: string;
+    contentTypes: string[];
+    postingSchedule: string;
+    budgetSuggestion: string;
+    expectedResults: string;
+    kpis: { metric: string; current: string; target30d: string; target90d: string }[];
+  }[];
+  adStrategy?: {
+    currentAdSpend: string;
+    competitorAdActivity: string;
+    recommendedBudget: string;
+    recommendedPlatforms: string[];
+    adTypes: { type: string; why: string; budget: string }[];
+  };
+  influencerStrategy?: {
+    recommendedTier: string;
+    suggestedProfiles: { name: string; platform: string; followers: string; niche: string; whyRelevant: string }[];
+    collaborationIdeas: string[];
+    estimatedCost: string;
+  };
+  marketplaceAnalysis?: {
+    platform: string;
+    currentPresence: string;
+    topProducts: { title: string; price: string; soldQty: number }[];
+    competitorPricing: string;
+    recommendations: string[];
+  };
+  // ── Social Proof (NEW) ──
+  socialProof?: {
+    overallSentiment: 'very_positive' | 'positive' | 'mixed' | 'negative' | 'critical';
+    trustScore: number;
+    googleReviewsAnalysis?: {
+      averageRating: number;
+      totalReviews: number;
+      positiveThemes: string[];
+      negativeThemes: string[];
+      samplePositive: string;
+      sampleNegative: string;
+    };
+    socialMentions: {
+      platform: string;
+      sentiment: string;
+      topComment: string;
+      context: string;
+    }[];
+    recommendations: string[];
+  };
+  // ── Funnel Analysis (NEW) ──
+  funnelAnalysis?: {
+    stages: {
+      stage: string;
+      channels: string[];
+      currentState: string;
+      bottleneck: string;
+      fix: string;
+    }[];
+    conversionPaths: string[];
+    biggestLeak: string;
+  };
+  // ── Content Identity Audit (NEW) ──
+  contentIdentityAudit?: {
+    visualScore: number;
+    toneOfVoice: string;
+    contentMix: { type: string; percentage: string }[];
+    isTransactionalOnly: boolean;
+    valueContentRatio: string;
+    brandConsistency: string;
+    recommendations: string[];
+  };
+}
+
 export enum AppState {
   LANDING = 'LANDING',
   AUTH = 'AUTH',

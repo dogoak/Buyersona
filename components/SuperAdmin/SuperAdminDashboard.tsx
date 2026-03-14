@@ -27,6 +27,7 @@ export default function SuperAdminDashboard() {
     const [selectedUser, setSelectedUser] = useState<any | null>(null);
     const [priceInput, setPriceInput] = useState<string>('');
     const [deepDivePriceInput, setDeepDivePriceInput] = useState<string>('');
+    const [digitalAuditPriceInput, setDigitalAuditPriceInput] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedOnboardingData, setSelectedOnboardingData] = useState<any | null>(null);
@@ -78,6 +79,7 @@ export default function SuperAdminDashboard() {
             setRawFeedback(feedbackRes.data || []);
             if (settingsRes.data?.report_price_ars) setPriceInput(settingsRes.data.report_price_ars.toString());
             if (settingsRes.data?.deep_dive_price_ars) setDeepDivePriceInput(settingsRes.data.deep_dive_price_ars.toString());
+            if ((settingsRes.data as any)?.digital_audit_price_ars) setDigitalAuditPriceInput((settingsRes.data as any).digital_audit_price_ars.toString());
             if (settingsRes.data?.exchange_rate_usd) setExchangeRateInput(settingsRes.data.exchange_rate_usd.toString());
 
         } catch (err: any) {
@@ -349,6 +351,7 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
             const { error } = await supabase.from('system_settings').update({
                 report_price_ars: parseInt(priceInput),
                 deep_dive_price_ars: parseInt(deepDivePriceInput),
+                digital_audit_price_ars: parseInt(digitalAuditPriceInput),
                 exchange_rate_usd: parseFloat(exchangeRateInput)
             }).eq('id', 1);
             if (error) throw error;
@@ -1018,6 +1021,22 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
                     </div>
 
                     <div className="mb-6">
+                        <label className="block text-sm font-bold text-slate-700 mb-2">Precio Auditoría Digital (ARS)</label>
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <DollarSign size={16} className="text-slate-400" />
+                            </div>
+                            <input
+                                type="number"
+                                value={digitalAuditPriceInput}
+                                onChange={(e) => setDigitalAuditPriceInput(e.target.value)}
+                                className="pl-10 w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-emerald-500 outline-none text-slate-900 font-bold"
+                            />
+                        </div>
+                        <p className="text-xs text-slate-400 mt-2">Auditoría completa de presencia digital (web, SEO, redes, AI-readiness, referentes). Se cobra por separado.</p>
+                    </div>
+
+                    <div className="mb-6">
                         <label className="block text-sm font-bold text-slate-700 mb-2">Cotización USD → ARS (tipo de cambio)</label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -1035,7 +1054,7 @@ CREATE POLICY "Admins can view all logs" ON system_logs FOR SELECT USING(is_admi
 
                     <button
                         onClick={updatePrice}
-                        disabled={isSaving || (priceInput === rawSettings?.report_price_ars?.toString() && deepDivePriceInput === rawSettings?.deep_dive_price_ars?.toString() && exchangeRateInput === rawSettings?.exchange_rate_usd?.toString())}
+                        disabled={isSaving || (priceInput === rawSettings?.report_price_ars?.toString() && deepDivePriceInput === rawSettings?.deep_dive_price_ars?.toString() && digitalAuditPriceInput === (rawSettings as any)?.digital_audit_price_ars?.toString() && exchangeRateInput === rawSettings?.exchange_rate_usd?.toString())}
                         className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold px-8 py-3 rounded-xl transition flex items-center gap-2"
                     >
                         {isSaving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}

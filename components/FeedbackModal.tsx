@@ -5,7 +5,7 @@ import { MessageSquareHeart, X, Send, CheckCircle2, Loader2 } from 'lucide-react
 interface FeedbackModalProps {
     reportId?: string;
     deepDiveId?: string;
-    reportType: 'business' | 'deepdive';
+    reportType: 'business' | 'deepdive' | 'digital_audit';
     userId: string;
     lang?: string;
 }

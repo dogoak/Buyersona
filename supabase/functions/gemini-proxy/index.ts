@@ -45,7 +45,7 @@ Deno.serve(async (req: Request) => {
         }
 
         // Actions that require auth
-        const authRequiredActions = ['analyze_business', 'analyze_deepdive', 'profundizar'];
+        const authRequiredActions = ['analyze_business', 'analyze_deepdive', 'analyze_digital_audit', 'profundizar'];
         if (authRequiredActions.includes(action) && !user) {
             return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                 status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
