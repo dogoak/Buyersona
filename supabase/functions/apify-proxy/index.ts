@@ -369,7 +369,7 @@ serve(async (req) => {
             
             try {
                 const data = await callApify('saswave~mercadolibre-product-scraper', {
-                    startUrls: [{ url: mlUrl }],
+                    url: mlUrl,
                     maxItems: 10
                 }, 90);
                 

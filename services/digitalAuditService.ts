@@ -1569,7 +1569,9 @@ export const analyzeDigitalAudit = async (
     ═══════════════════════════════════════════
     6. AUDITORÍA DE REDES SOCIALES (socialMediaAudit array)
     ═══════════════════════════════════════════
-    Para CADA plataforma (incluí las que FALTAN y deberían tener):
+    Para CADA plataforma (incluí las que FALTAN y deberían tener).
+    ⚠️ OBLIGATORIO: si recibiste datos reales de una plataforma arriba, DEBÉS incluirla con sus números exactos.
+    NO OMITAS NINGUNA PLATAFORMA QUE TENGA DATOS REALES.
     - platform: nombre
     - status: strong/moderate/weak/absent
     - followers: string con número real
@@ -1938,18 +1940,125 @@ function buildAuditResponseSchema() {
                 type: Type.ARRAY,
                 items: { type: Type.OBJECT, properties: { phase: { type: Type.STRING }, focus: { type: Type.STRING }, actions: { type: Type.ARRAY, items: { type: Type.STRING } }, kpis: { type: Type.ARRAY, items: { type: Type.STRING } } } }
             },
-            // NOTE: The 8 new extended sections (socialProof, funnelAnalysis, contentIdentityAudit,
-            // competitorComparison, channelStrategies, adStrategy, influencerStrategy, marketplaceAnalysis)
-            // are NOT defined here because Gemini rejects schemas that are too large/complex.
-            // Per official docs: "The API may reject very large or deeply nested schemas."
-            // These sections are requested in the prompt text, so Gemini will still generate them
-            // as part of the JSON output — they just won't have strict schema enforcement.
+            // Extended sections — defined as OBJECT with flat string properties to keep schema complexity low
+            // while still forcing Gemini to generate these sections
+            socialProof: {
+                type: Type.OBJECT,
+                properties: {
+                    trustScore: { type: Type.NUMBER },
+                    overallSentiment: { type: Type.STRING },
+                    googleReviewsAnalysis: { type: Type.OBJECT, properties: {
+                        averageRating: { type: Type.NUMBER },
+                        totalReviews: { type: Type.NUMBER },
+                        positiveThemes: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        negativeThemes: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        samplePositive: { type: Type.STRING },
+                        sampleNegative: { type: Type.STRING }
+                    }},
+                    socialMentions: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
+                        platform: { type: Type.STRING }, sentiment: { type: Type.STRING }, text: { type: Type.STRING }
+                    }}},
+                    recommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
+                }
+            },
+            funnelAnalysis: {
+                type: Type.OBJECT,
+                properties: {
+                    biggestLeak: { type: Type.STRING },
+                    stages: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
+                        name: { type: Type.STRING }, status: { type: Type.STRING }, description: { type: Type.STRING }
+                    }}},
+                    conversionPaths: { type: Type.ARRAY, items: { type: Type.STRING } }
+                }
+            },
+            contentIdentityAudit: {
+                type: Type.OBJECT,
+                properties: {
+                    visualScore: { type: Type.NUMBER },
+                    isTransactionalOnly: { type: Type.BOOLEAN },
+                    toneOfVoice: { type: Type.STRING },
+                    brandConsistency: { type: Type.STRING },
+                    contentMix: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
+                        type: { type: Type.STRING }, percentage: { type: Type.NUMBER }
+                    }}},
+                    valueContentRatio: { type: Type.STRING },
+                    recommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
+                }
+            },
+            competitorComparison: {
+                type: Type.OBJECT,
+                properties: {
+                    platforms: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
+                        platform: { type: Type.STRING },
+                        yourMetric: { type: Type.STRING },
+                        competitorAvg: { type: Type.STRING },
+                        verdict: { type: Type.STRING }
+                    }}}
+                }
+            },
+            channelStrategies: {
+                type: Type.ARRAY,
+                items: { type: Type.OBJECT, properties: {
+                    channel: { type: Type.STRING },
+                    currentStatus: { type: Type.STRING },
+                    priority: { type: Type.STRING },
+                    quickWins: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    contentIdeas: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    postingFrequency: { type: Type.STRING },
+                    kpis: { type: Type.ARRAY, items: { type: Type.STRING } }
+                }}
+            },
+            adStrategy: {
+                type: Type.OBJECT,
+                properties: {
+                    currentAdSpend: { type: Type.STRING },
+                    competitorAdActivity: { type: Type.STRING },
+                    recommendedBudget: { type: Type.STRING },
+                    recommendedPlatforms: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    adTypes: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
+                        platform: { type: Type.STRING },
+                        format: { type: Type.STRING },
+                        objective: { type: Type.STRING },
+                        estimatedCost: { type: Type.STRING }
+                    }}}
+                }
+            },
+            influencerStrategy: {
+                type: Type.OBJECT,
+                properties: {
+                    recommendedTier: { type: Type.STRING },
+                    estimatedCost: { type: Type.STRING },
+                    suggestedProfiles: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
+                        name: { type: Type.STRING },
+                        platform: { type: Type.STRING },
+                        followers: { type: Type.STRING },
+                        reason: { type: Type.STRING }
+                    }}},
+                    collaborationIdeas: { type: Type.ARRAY, items: { type: Type.STRING } }
+                }
+            },
+            marketplaceAnalysis: {
+                type: Type.OBJECT,
+                properties: {
+                    platform: { type: Type.STRING },
+                    currentPresence: { type: Type.STRING },
+                    recommendation: { type: Type.STRING },
+                    products: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
+                        name: { type: Type.STRING },
+                        price: { type: Type.STRING },
+                        status: { type: Type.STRING }
+                    }}},
+                    actionItems: { type: Type.ARRAY, items: { type: Type.STRING } }
+                }
+            }
         },
         required: [
             'snapshot', 'findings', 'webTechnical', 'seoAnalysis', 'aiReadiness', 'socialMediaAudit', 
             'reputationAnalysis', 'competitorBenchmark', 'emailCrmAssessment', 'industryLeaders', 
             'opportunities', 'risks', 'digitalHealthGrade', 'executiveSummary', 'moneyOnTheTable', 
-            'roadmap', 'visualIdentityAudit', 'customerPerception'
+            'roadmap', 'visualIdentityAudit', 'customerPerception',
+            'socialProof', 'funnelAnalysis', 'contentIdentityAudit', 'competitorComparison',
+            'channelStrategies', 'adStrategy', 'influencerStrategy', 'marketplaceAnalysis'
         ]
     };
 }
