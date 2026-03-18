@@ -11,6 +11,7 @@ import ProfundizarPanel from '../ProfundizarPanel';
 import GlossaryModal from '../GlossaryModal';
 import FeedbackModal from '../FeedbackModal';
 import ServicesModal from '../ServicesModal';
+import EnrichmentCards from './EnrichmentCards';
 
 interface ReportViewProps {
     lang: Language;
@@ -270,6 +271,12 @@ export default function ReportView({ lang }: ReportViewProps) {
                         </div>
                     </div>
                 </div>
+
+                {/* Enrichment Data Cards (Apify real data) */}
+                <EnrichmentCards
+                    data={((report.analysis_result as any)?.result || report.analysis_result)?._enrichmentData}
+                    type="strategic"
+                />
 
                 <Dashboard
                     data={((report.analysis_result as any)?.result || report.analysis_result) as StrategicAnalysis}

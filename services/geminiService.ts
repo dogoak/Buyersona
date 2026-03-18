@@ -65,17 +65,18 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
 
     // ── Scrape Google Trends (fail-silent) ──
     let trendsContext = '';
+    let _rawTrendsData: any[] = [];
     try {
         const trendsTerms = [input.productName, input.businessName].filter(Boolean).slice(0, 2);
         if (trendsTerms.length > 0) {
             console.log('[Strategic] Scraping Google Trends for:', trendsTerms);
-            const trendsData = await scrapeGoogleTrendsApify(trendsTerms);
-            if (trendsData.length > 0) {
+            _rawTrendsData = await scrapeGoogleTrendsApify(trendsTerms);
+            if (_rawTrendsData.length > 0) {
                 trendsContext = `
     ═══════════════════════════════════════════
     DATOS REALES DE GOOGLE TRENDS (últimos 12 meses, Argentina):
     ═══════════════════════════════════════════
-    ${trendsData.map(t => `Término: "${t.term}"
+    ${_rawTrendsData.map(t => `Término: "${t.term}"
     - Tendencia: ${t.trendSummary === 'rising' ? '📈 CRECIENTE' : t.trendSummary === 'declining' ? '📉 DECRECIENTE' : '➡️ ESTABLE'}
     - Pico de interés: ${t.peakValue}/100 | Valor actual: ${t.currentValue}/100
     - Búsquedas relacionadas: ${t.relatedQueries.join(', ') || 'N/A'}`).join('\n    ')}
@@ -92,6 +93,8 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
 
     // ── Scrape Google Maps for real competitors + SERP (fail-silent, parallel) ──
     let competitorContext = '';
+    let _rawMapsData: any[] = [];
+    let _rawSerpData: any[] = [];
     try {
         const businessTypes = input.businessType || [];
         const region = input.targetRegion || 'Argentina';
@@ -102,23 +105,23 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
         ].filter(q => q.trim().length > 5);
 
         console.log('[Strategic] Scraping Maps/SERP for:', mapsQuery, serpQueries);
-        const [mapsData, serpData] = await Promise.all([
+        [_rawMapsData, _rawSerpData] = await Promise.all([
             scrapeGoogleMapsCompetitors(mapsQuery),
             scrapeGoogleSerpForAnalysis(serpQueries),
         ]);
 
         const parts: string[] = [];
 
-        if (mapsData.length > 0) {
+        if (_rawMapsData.length > 0) {
             parts.push(`
     COMPETIDORES REALES EN GOOGLE MAPS (búsqueda: "${mapsQuery}"):
-    ${mapsData.map((c, i) => `${i + 1}. "${c.name}" — ⭐ ${c.rating}/5 (${c.totalReviews} reseñas) | ${c.category} | ${c.address}${c.website ? ` | Web: ${c.website}` : ''}`).join('\n    ')}`);
+    ${_rawMapsData.map((c, i) => `${i + 1}. "${c.name}" — ⭐ ${c.rating}/5 (${c.totalReviews} reseñas) | ${c.category} | ${c.address}${c.website ? ` | Web: ${c.website}` : ''}`).join('\n    ')}`);
         }
 
-        if (serpData.length > 0) {
+        if (_rawSerpData.length > 0) {
             parts.push(`
     QUIÉN DOMINA GOOGLE PARA ESTE RUBRO:
-    ${serpData.map(s => `Búsqueda "${s.query}":\n    ${s.topResults.map(r => `    #${r.position}: ${r.title} (${r.url})`).join('\n    ')}`).join('\n    ')}`);
+    ${_rawSerpData.map(s => `Búsqueda "${s.query}":\n    ${s.topResults.map(r => `    #${r.position}: ${r.title} (${r.url})`).join('\n    ')}`).join('\n    ')}`);
         }
 
         if (parts.length > 0) {
@@ -491,6 +494,13 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
 
     try {
         const parsedResult = JSON.parse(response.text) as StrategicAnalysis;
+
+        // Attach enrichment data so the UI can render visual cards
+        (parsedResult as any)._enrichmentData = {
+            trends: _rawTrendsData.length > 0 ? _rawTrendsData : null,
+            mapsCompetitors: _rawMapsData.length > 0 ? _rawMapsData : null,
+            serpResults: _rawSerpData.length > 0 ? _rawSerpData : null,
+        };
 
         let costUsd = 0;
         if (response.usageMetadata) {

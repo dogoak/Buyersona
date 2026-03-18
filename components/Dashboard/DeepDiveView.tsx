@@ -17,6 +17,7 @@ import { analyzeProductDeepDive } from '../../services/geminiDeepDiveService';
 import ProfundizarPanel from '../ProfundizarPanel';
 import GlossaryModal from '../GlossaryModal';
 import FeedbackModal from '../FeedbackModal';
+import EnrichmentCards from './EnrichmentCards';
 import type {
     DeepDiveResult, DeepDivePersona, ObjectionHandling, CompetitorAnalysis,
     SalesSurvivalKit, DeepDiveExecutionStep, PricingStrategy, UnitEconomics,
@@ -316,6 +317,12 @@ export default function DeepDiveView() {
                         </div>
                     </div>
                 </div>
+
+                {/* Enrichment Data Cards (Apify real data) */}
+                <EnrichmentCards
+                    data={(result as any)?._enrichmentData}
+                    type="deepDive"
+                />
 
                 {/* 📌 3 Pasos Para Esta Semana */}
                 {result.quickWins && result.quickWins.length > 0 && (

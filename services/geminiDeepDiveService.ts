@@ -19,17 +19,18 @@ export const analyzeProductDeepDive = async (
 
     // ── Scrape Google Trends for the product (fail-silent) ──
     let trendsContext = '';
+    let _rawTrendsData: any[] = [];
     try {
         const trendsTerms = [productInput.productName].filter(Boolean);
         if (trendsTerms.length > 0) {
             console.log('[DeepDive] Scraping Google Trends for:', trendsTerms);
-            const trendsData = await scrapeGoogleTrendsApify(trendsTerms);
-            if (trendsData.length > 0) {
+            _rawTrendsData = await scrapeGoogleTrendsApify(trendsTerms);
+            if (_rawTrendsData.length > 0) {
                 trendsContext = `
     ═══════════════════════════════════════════
     DATOS REALES DE GOOGLE TRENDS - PRODUCTO (últimos 12 meses, Argentina):
     ═══════════════════════════════════════════
-    ${trendsData.map(t => `Producto: "${t.term}"
+    ${_rawTrendsData.map(t => `Producto: "${t.term}"
     - Tendencia de demanda: ${t.trendSummary === 'rising' ? '📈 CRECIENTE' : t.trendSummary === 'declining' ? '📉 DECRECIENTE' : '➡️ ESTABLE'}
     - Pico de interés: ${t.peakValue}/100 | Valor actual: ${t.currentValue}/100
     - Búsquedas relacionadas del producto: ${t.relatedQueries.join(', ') || 'N/A'}`).join('\n    ')}
@@ -48,35 +49,37 @@ export const analyzeProductDeepDive = async (
 
     // ── Scrape Google Shopping + MercadoLibre for pricing benchmark (fail-silent, parallel) ──
     let pricingContext = '';
+    let _rawShoppingData: any = null;
+    let _rawMlData: any = null;
     try {
         const productQuery = productInput.productName;
         if (productQuery) {
             console.log('[DeepDive] Scraping pricing for:', productQuery);
-            const [shoppingData, mlData] = await Promise.all([
+            [_rawShoppingData, _rawMlData] = await Promise.all([
                 scrapeGoogleShoppingApify([productQuery]),
                 scrapeMercadoLibreForPricing(productQuery),
             ]);
 
             const pricingParts: string[] = [];
 
-            if (shoppingData && shoppingData.totalProducts > 0) {
+            if (_rawShoppingData && _rawShoppingData.totalProducts > 0) {
                 pricingParts.push(`
     GOOGLE SHOPPING ARGENTINA — Benchmark de Precios Reales:
-    - Productos encontrados: ${shoppingData.totalProducts}
-    - Precio PROMEDIO del mercado: $${shoppingData.averagePrice.toLocaleString('es-AR')}
-    - Precio MÁS BAJO: $${shoppingData.lowestPrice.toLocaleString('es-AR')}
-    - Precio MÁS ALTO: $${shoppingData.highestPrice.toLocaleString('es-AR')}
-    - Top sellers: ${shoppingData.topProducts.slice(0, 5).map(p => `"${p.title}" ($${p.price.toLocaleString('es-AR')}) por ${p.seller}`).join(' | ')}`);
+    - Productos encontrados: ${_rawShoppingData.totalProducts}
+    - Precio PROMEDIO del mercado: $${_rawShoppingData.averagePrice.toLocaleString('es-AR')}
+    - Precio MÁS BAJO: $${_rawShoppingData.lowestPrice.toLocaleString('es-AR')}
+    - Precio MÁS ALTO: $${_rawShoppingData.highestPrice.toLocaleString('es-AR')}
+    - Top sellers: ${_rawShoppingData.topProducts.slice(0, 5).map((p: any) => `"${p.title}" ($${p.price.toLocaleString('es-AR')}) por ${p.seller}`).join(' | ')}`);
             }
 
-            if (mlData && mlData.found && mlData.totalProducts > 0) {
+            if (_rawMlData && _rawMlData.found && _rawMlData.totalProducts > 0) {
                 pricingParts.push(`
     MERCADOLIBRE ARGENTINA — Benchmark de Precios Reales:
-    - Productos encontrados: ${mlData.totalProducts}
-    - Precio PROMEDIO: $${mlData.averagePrice.toLocaleString('es-AR')}
-    - Precio MÁS BAJO: $${mlData.lowestPrice.toLocaleString('es-AR')}
-    - Precio MÁS ALTO: $${mlData.highestPrice.toLocaleString('es-AR')}
-    - Productos más vendidos: ${mlData.products.slice(0, 5).map(p => `"${p.title}" ($${p.price.toLocaleString('es-AR')}) - ${p.soldQuantity} vendidos`).join(' | ')}`);
+    - Productos encontrados: ${_rawMlData.totalProducts}
+    - Precio PROMEDIO: $${_rawMlData.averagePrice.toLocaleString('es-AR')}
+    - Precio MÁS BAJO: $${_rawMlData.lowestPrice.toLocaleString('es-AR')}
+    - Precio MÁS ALTO: $${_rawMlData.highestPrice.toLocaleString('es-AR')}
+    - Productos más vendidos: ${_rawMlData.products.slice(0, 5).map((p: any) => `"${p.title}" ($${p.price.toLocaleString('es-AR')}) - ${p.soldQuantity} vendidos`).join(' | ')}`);
             }
 
             if (pricingParts.length > 0) {
@@ -100,6 +103,7 @@ export const analyzeProductDeepDive = async (
 
     // ── Scrape Google SERP for the product (fail-silent) ──
     let serpContext = '';
+    let _rawSerpData: any[] = [];
     try {
         const serpQueries = [
             `comprar ${productInput.productName} online`,
@@ -107,13 +111,13 @@ export const analyzeProductDeepDive = async (
         ].filter(q => q && q.trim().length > 3);
         if (serpQueries.length > 0) {
             console.log('[DeepDive] Scraping SERP for:', serpQueries);
-            const serpData = await scrapeGoogleSerpForAnalysis(serpQueries);
-            if (serpData.length > 0) {
+            _rawSerpData = await scrapeGoogleSerpForAnalysis(serpQueries);
+            if (_rawSerpData.length > 0) {
                 serpContext = `
     ═══════════════════════════════════════════
     QUIÉN DOMINA GOOGLE PARA ESTE PRODUCTO (VERIFICADO):
     ═══════════════════════════════════════════
-    ${serpData.map(s => `Búsqueda "${s.query}":\n    ${s.topResults.map(r => `    #${r.position}: ${r.title} (${r.url})`).join('\n    ')}`).join('\n    ')}
+    ${_rawSerpData.map(s => `Búsqueda "${s.query}":\n    ${s.topResults.map(r => `    #${r.position}: ${r.title} (${r.url})`).join('\n    ')}`).join('\n    ')}
     
     USÁ ESTOS DATOS para la sección 'competitorTearDown' y 'marketStrategy'.
     Estos son los negocios que dominan Google para este producto.
@@ -335,6 +339,14 @@ export const analyzeProductDeepDive = async (
             const estimatedResponseTokens = response.text ? response.text.length / 4 : 5000;
             costUsd = (estimatedPromptTokens * inputTokenPriceUsd) + (estimatedResponseTokens * outputTokenPriceUsd);
         }
+
+        // Attach enrichment data so the UI can render visual cards
+        (parsedResult as any)._enrichmentData = {
+            trends: _rawTrendsData.length > 0 ? _rawTrendsData : null,
+            googleShopping: _rawShoppingData && _rawShoppingData.totalProducts > 0 ? _rawShoppingData : null,
+            mercadoLibre: _rawMlData && _rawMlData.found ? _rawMlData : null,
+            serpResults: _rawSerpData.length > 0 ? _rawSerpData : null,
+        };
 
         return { result: parsedResult, costUsd };
     } catch (e) {
