@@ -283,7 +283,7 @@ serve(async (req) => {
                 
                 const data = await callApify('alkausari_mujahid~google-ads-transparency-scraper', {
                     domains: [cleanDomain]
-                }, 90);
+                }, 120);
                 if (!data || data.length === 0) {
                     return new Response(JSON.stringify({ success: true, result: { isRunningAds: false, totalAds: 0, ads: [], searchedDomain: cleanDomain } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
@@ -376,14 +376,16 @@ serve(async (req) => {
             }
         }
 
-        // ── MercadoLibre ── (NEW)
+        // ── MercadoLibre ──
         if (action === 'scrape_mercadolibre') {
             const { storeName, searchQuery } = payload;
             if (!storeName && !searchQuery) throw new Error('storeName or searchQuery required');
             
-            // Search for the seller/store on MercadoLibre
+            // If storeName is a direct URL, use it as-is; otherwise build search URL
             const query = storeName || searchQuery;
-            const mlUrl = `https://listado.mercadolibre.com.ar/${encodeURIComponent(query).replace(/%20/g, '-')}`;
+            const mlUrl = query.startsWith('http') 
+                ? query  // Direct store/profile URL
+                : `https://listado.mercadolibre.com.ar/${encodeURIComponent(query).replace(/%20/g, '-')}`;
             
             try {
                 const data = await callApify('saswave~mercadolibre-product-scraper', {
@@ -427,6 +429,119 @@ serve(async (req) => {
             } catch (e: any) {
                 console.error('MercadoLibre scraper error:', e.message);
                 return new Response(JSON.stringify({ success: true, result: { found: false, totalProducts: 0, products: [], seller: null, error: e.message } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+        }
+
+        // ── Google Search Results (SERP) ──
+        if (action === 'scrape_google_serp') {
+            const { queries, businessName, websiteDomain, competitors } = payload;
+            if (!queries || !Array.isArray(queries) || queries.length === 0) throw new Error('queries array required');
+            
+            try {
+                // Determine clean base domain to match standard URLs
+                const userDomain = websiteDomain 
+                    ? websiteDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase() 
+                    : null;
+                const normalizeString = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const userBrandNorm = businessName ? normalizeString(businessName) : null;
+                const competitorBrandNorms = (competitors || []).map((c: any) => ({
+                    originalName: c.name,
+                    normName: normalizeString(c.name),
+                    domain: c.website ? c.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase() : null
+                }));
+
+                const data = await callApify('apify~google-search-scraper', {
+                    queries: queries.slice(0, 5), // Max 5 queries to save cost/time
+                    resultsPerPage: 10,
+                    countryCode: "ar", // Default to Argentina for local relevance
+                    languageCode: "es"
+                }, 120);
+
+                if (!data || data.length === 0) {
+                    return new Response(JSON.stringify({ success: true, result: { queries: [] } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+
+                const resultQueries = data.map((searchData: any) => {
+                    const query = searchData.searchQuery?.term || "";
+                    const rawOrganic = searchData.organicResults || [];
+                    
+                    // Map organic results and look for User vs Competitors
+                    let userPosition: number | null = null;
+                    let userMatchedBy = "";
+                    const competitorPositions: { name: string; position: number; matchedBy: string }[] = [];
+                    
+                    const organicResults = rawOrganic.map((org: any, index: number) => {
+                        const position = index + 1;
+                        const url = org.url || "";
+                        const urlLower = url.toLowerCase();
+                        const titleLower = (org.title || "").toLowerCase();
+                        
+                        // Check if this result belongs to the USER
+                        const isUserMatch = (userDomain && urlLower.includes(userDomain)) || 
+                                           (userBrandNorm && titleLower.replace(/[^a-z0-9]/g, '').includes(userBrandNorm));
+                        if (isUserMatch && userPosition === null) {
+                            userPosition = position;
+                            userMatchedBy = userDomain && urlLower.includes(userDomain) ? "domain" : "title";
+                        }
+                        
+                        // Check if this result belongs to any COMPETITOR
+                        competitorBrandNorms.forEach((c: any) => {
+                            const isCompMatch = (c.domain && urlLower.includes(c.domain)) ||
+                                                (c.normName && titleLower.replace(/[^a-z0-9]/g, '').includes(c.normName));
+                            if (isCompMatch) {
+                                // Only keep their *best* position
+                                if (!competitorPositions.find(cp => cp.name === c.originalName)) {
+                                    competitorPositions.push({
+                                        name: c.originalName,
+                                        position,
+                                        matchedBy: c.domain && urlLower.includes(c.domain) ? "domain" : "title"
+                                    });
+                                }
+                            }
+                        });
+
+                        return {
+                            position,
+                            title: org.title || "",
+                            url: org.url || "",
+                            description: org.description || "",
+                            isSitelinks: !!org.sitelinks,
+                            isFeaturedSnippet: !!org.isFeaturedSnippet
+                        };
+                    });
+
+                    // Parse Local Pack (Maps results on SERP)
+                    let userInLocalPack = false;
+                    const rawLocal = searchData.localResults || [];
+                    const localPack = rawLocal.map((loc: any, index: number) => {
+                        const titleLower = (loc.title || "").toLowerCase();
+                        if (userBrandNorm && titleLower.replace(/[^a-z0-9]/g, '').includes(userBrandNorm)) {
+                            userInLocalPack = true;
+                        }
+                        return {
+                            position: index + 1,
+                            title: loc.title || "",
+                            rating: loc.rating || null,
+                            reviews: loc.reviews || 0
+                        };
+                    });
+
+                    return {
+                        query,
+                        organicResults: organicResults.slice(0, 5), // Keep top 5 for the report
+                        userPosition,
+                        userMatchedBy,
+                        competitorPositions,
+                        userInLocalPack,
+                        localPack: localPack.slice(0, 3) // Top 3 maps results
+                    };
+                });
+
+                return new Response(JSON.stringify({ success: true, result: { queries: resultQueries } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+            } catch (e: any) {
+                console.error('Google SERP scraper error:', e.message);
+                return new Response(JSON.stringify({ success: true, result: { queries: [], error: e.message } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
         }
 

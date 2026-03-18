@@ -1,7 +1,7 @@
 
 import { callGeminiProxy } from './geminiProxyClient';
 import { GoogleGenAI, Type } from "@google/genai";
-import { DigitalAuditInput, DigitalPreScanResult, DigitalAuditResult, StrategicAnalysis, Language, InstagramScrapeResult, GoogleMapsScrapeResult, FacebookScrapeResult, TikTokScrapeResult, XScrapeResult, LinkedInScrapeResult, YouTubeScrapeResult, PinterestScrapeResult, MetaAdsScrapeResult, MercadoLibreScrapeResult } from "../types";
+import { DigitalAuditInput, DigitalPreScanResult, DigitalAuditResult, StrategicAnalysis, Language, InstagramScrapeResult, GoogleMapsScrapeResult, FacebookScrapeResult, TikTokScrapeResult, XScrapeResult, LinkedInScrapeResult, YouTubeScrapeResult, PinterestScrapeResult, MetaAdsScrapeResult, MercadoLibreScrapeResult, GoogleSerpResult } from "../types";
 import { supabase } from './supabaseClient';
 
 
@@ -385,6 +385,34 @@ export const scrapeLinkedInAdsApify = async (advertiserName: string): Promise<an
     }
 };
 
+export const scrapeGoogleSerpApify = async (
+    queries: string[],
+    businessName: string,
+    websiteDomain: string,
+    competitors?: { name: string; website: string }[]
+): Promise<{ queries: GoogleSerpResult[] } | null> => {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!queries || queries.length === 0) return null;
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const response = await fetch(`${supabaseUrl}/functions/v1/apify-proxy`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
+            body: JSON.stringify({
+                action: 'scrape_google_serp',
+                payload: { queries, businessName, websiteDomain, competitors }
+            }),
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (!data.success) return null;
+        return data.result as { queries: GoogleSerpResult[] };
+    } catch (e) {
+        console.error('Google SERP scrape error:', e);
+        return null;
+    }
+};
+
 // ── Pre-scan: Scrape first, then enrich with Gemini ──────────────────
 export const preScanDigitalPresence = async (
     websiteUrl: string,
@@ -419,7 +447,7 @@ export const preScanDigitalPresence = async (
     
     1. FIND SOCIAL MEDIA PROFILES — Run these Google searches:
        - Search: "${brandHint} instagram"
-       - Search: "${brandHint} facebook" 
+       - Search: "${brandHint} facebook"
        - Search: "${brandHint} tiktok"
        - Search: "${brandHint} linkedin"
        - Search: "${brandHint} youtube"
@@ -841,6 +869,57 @@ export const analyzeDigitalAudit = async (
         input.pinterestData = pinterestData;
     }
 
+    // MercadoLibre — only scrape if user provided a direct URL
+    let mercadolibreData: MercadoLibreScrapeResult | null = null;
+    try {
+        const mlMarketplace = input.marketplaces?.find(m => m.platform.toLowerCase().includes('mercado'));
+        const mlStoreUrl = mlMarketplace?.storeName;
+        // Only scrape if we have a URL (starts with http) — avoid keyword search that returns junk
+        if (mlStoreUrl && mlStoreUrl.trim().startsWith('http')) {
+            mercadolibreData = await scrapeMercadoLibreApify(mlStoreUrl, undefined);
+        }
+    } catch (e) {
+        console.error('Failed to scrape MercadoLibre:', e);
+    }
+    if (mercadolibreData) {
+        input.mercadolibreData = mercadolibreData;
+    }
+
+    // Google SERP Scraper (Auto-generated queries)
+    try {
+        const queries = [];
+        const bName = parentOnboardingData?.businessName || '';
+        const ind = parentBusinessData.businessClassification || parentOnboardingData?.industry || '';
+        
+        if (bName) queries.push(bName);
+        if (ind) queries.push(`comprar ${ind.toLowerCase()}`);
+        if (bName && ind) queries.push(`${ind.toLowerCase()} ${bName.toLowerCase()}`);
+        
+        // Add one main competitor if exists
+        const mainCompetitor = (input.competitors || [])[0];
+        if (mainCompetitor?.name) {
+            queries.push(mainCompetitor.name);
+            if (ind) queries.push(`${ind.toLowerCase()} ${mainCompetitor.name.toLowerCase()}`);
+        }
+
+        // Filter and cap to 5
+        const uniqueQueries = [...new Set(queries.filter(q => q.trim().length > 0))].slice(0, 5);
+
+        if (uniqueQueries.length > 0) {
+            const serpResult = await scrapeGoogleSerpApify(
+                uniqueQueries, 
+                bName, 
+                input.websiteUrl, 
+                input.competitors
+            );
+            if (serpResult && serpResult.queries) {
+                input.serpData = serpResult.queries;
+            }
+        }
+    } catch (e) {
+        console.error('Failed to scrape Google SERP via Apify:', e);
+    }
+
     // Meta Ads Library — check if user runs ads
     let metaAdsData: MetaAdsScrapeResult | null = null;
     try {
@@ -852,23 +931,6 @@ export const analyzeDigitalAudit = async (
     }
     if (metaAdsData) {
         input.metaAdsData = metaAdsData;
-    }
-
-    // MercadoLibre — scrape seller/products data
-    let mercadolibreData: MercadoLibreScrapeResult | null = null;
-    try {
-        // Check if there's a MercadoLibre marketplace entry
-        const mlMarketplace = input.marketplaces?.find(m => m.platform.toLowerCase().includes('mercado'));
-        const mlStoreName = mlMarketplace?.storeName;
-        const businessName = parentOnboardingData?.businessName;
-        if (mlStoreName || businessName) {
-            mercadolibreData = await scrapeMercadoLibreApify(mlStoreName || undefined, businessName || undefined);
-        }
-    } catch (e) {
-        console.error('Failed to scrape MercadoLibre:', e);
-    }
-    if (mercadolibreData) {
-        input.mercadolibreData = mercadolibreData;
     }
 
     // Ad Intelligence — scrape Google Ads, TikTok Ads, LinkedIn Ads
@@ -898,63 +960,69 @@ export const analyzeDigitalAudit = async (
         console.error('Failed to scrape ads:', e);
     }
 
-    // PHASE 0b: Scrape COMPETITORS (web + all social from their website)
+    // PHASE 0b: Scrape COMPETITORS — ONLY Instagram for comparison
     interface CompetitorScrapeData {
         name: string;
         website: string;
         webData: WebScraperResult | null;
         igData: InstagramScrapeResult | null;
-        fbData: FacebookScrapeResult | null;
-        tiktokData: TikTokScrapeResult | null;
-        metaAdsData: MetaAdsScrapeResult | null;
     }
     const competitorScrapedData: CompetitorScrapeData[] = [];
 
     if (input.competitors && input.competitors.length > 0) {
-        for (const comp of input.competitors) {
-            const compData: CompetitorScrapeData = { name: comp.name, website: comp.website, webData: null, igData: null, fbData: null, tiktokData: null, metaAdsData: null };
+        // Run all competitor scrapes in parallel for speed
+        const competitorPromises = input.competitors.map(async (comp) => {
+            const compData: CompetitorScrapeData = { name: comp.name, website: comp.website, webData: null, igData: null };
 
-            // Scrape competitor website
-            try {
-                compData.webData = await scrapeWebsite(comp.website);
-            } catch (e) {
-                console.error(`Failed to scrape competitor website ${comp.website}:`, e);
-            }
-
-            // Scrape all social networks found on competitor's website
-            if (compData.webData?.socialLinks) {
-                for (const link of compData.webData.socialLinks) {
-                    const p = link.platform.toLowerCase();
+            // If user provided Instagram URL directly, use it (skip website scrape)
+            if (comp.instagramUrl) {
+                const igHandle = comp.instagramUrl.replace(/^@/, '').replace(/.*instagram\.com\//, '').replace(/[/?#].*/, '').trim();
+                if (igHandle) {
                     try {
-                        if (p.includes('instagram') && !compData.igData) {
+                        compData.igData = await scrapeInstagramApify(igHandle);
+                    } catch (e) {
+                        console.error(`Failed to scrape competitor IG @${igHandle}:`, e);
+                    }
+                }
+                // Still scrape website for basic data (platform, tools, meta tags) — cheap, 1 call
+                try {
+                    compData.webData = await scrapeWebsite(comp.website);
+                } catch (e) {
+                    console.error(`Failed to scrape competitor website ${comp.website}:`, e);
+                }
+            } else {
+                // No IG URL provided — scrape website and try to discover Instagram
+                try {
+                    compData.webData = await scrapeWebsite(comp.website);
+                } catch (e) {
+                    console.error(`Failed to scrape competitor website ${comp.website}:`, e);
+                }
+
+                // Look for Instagram in discovered social links
+                if (compData.webData?.socialLinks) {
+                    for (const link of compData.webData.socialLinks) {
+                        if (link.platform.toLowerCase().includes('instagram') && !compData.igData) {
                             const igMatch = link.url.match(/instagram\.com\/([^/?\s]+)/);
                             if (igMatch && igMatch[1]) {
-                                compData.igData = await scrapeInstagramApify(igMatch[1]);
+                                try {
+                                    compData.igData = await scrapeInstagramApify(igMatch[1]);
+                                } catch (e) {
+                                    console.error(`Failed to scrape competitor IG:`, e);
+                                }
                             }
                         }
-                        if (p.includes('facebook') && !compData.fbData) {
-                            compData.fbData = await scrapeFacebookApify(link.url);
-                        }
-                        if (p.includes('tiktok') && !compData.tiktokData) {
-                            compData.tiktokData = await scrapeTikTokApify(link.url);
-                        }
-                    } catch (e) {
-                        console.error(`Failed to scrape competitor ${p}:`, e);
                     }
                 }
             }
 
-            // Also scrape Meta Ads for competitor (use their FB page if found)
-            if (compData.fbData && !compData.metaAdsData) {
-                try {
-                    // Search by competitor name in Meta Ads Library
-                    compData.metaAdsData = await scrapeMetaAdsApify(undefined, comp.name);
-                } catch (e) {
-                    console.error(`Failed to scrape competitor Meta Ads:`, e);
-                }
-            }
+            return compData;
+        });
 
-            competitorScrapedData.push(compData);
+        const results = await Promise.allSettled(competitorPromises);
+        for (const result of results) {
+            if (result.status === 'fulfilled') {
+                competitorScrapedData.push(result.value);
+            }
         }
     }
 
@@ -981,14 +1049,19 @@ export const analyzeDigitalAudit = async (
     );
     
     let businessContext = `
-    BUSINESS CONTEXT (from previous Strategic Analysis):
+    ═══════════════════════════════════════════
+    BUSINESS CONTEXT (from previous Strategic Analysis — USE THIS):
+    ═══════════════════════════════════════════
     Name: ${businessName}
     Summary: ${parentBusinessData.summary}
     Industry/Niche: ${industry}
     Classification: ${parentBusinessData.businessClassification}
-    Trends: ${parentBusinessData.marketInsights?.trends?.join('; ') || 'N/A'}
-    Competitors: ${parentBusinessData.competitors?.map(c => `${c.name} (${c.website})`).join(', ') || 'None identified'}
-    Target Personas: ${parentBusinessData.demandMap?.map(p => `"${p.name}" - ${p.strategy.bestChannel}`).join(', ') || 'N/A'}
+    Distribution Model: ${distributionModel || 'N/A'}
+    Trends del mercado: ${parentBusinessData.marketInsights?.trends?.join('; ') || 'N/A'}
+    Competitors (from strategic analysis): ${parentBusinessData.competitors?.map(c => `${c.name} (${c.website})`).join(', ') || 'None identified'}
+    Target Personas:
+    ${parentBusinessData.demandMap?.map(p => `  - "${p.name}": Canal ideal: ${p.strategy.bestChannel} | Tono: ${(p.strategy as any).messagingTone || 'N/A'} | Dolor: ${(p as any).painPoints?.[0] || 'N/A'}`).join('\n') || 'N/A'}
+    USÁ ESTAS PERSONAS para cruzar con tus recomendaciones de contenido y canales.
     `;
 
     if (parentOnboardingData) {
@@ -998,7 +1071,26 @@ export const analyzeDigitalAudit = async (
     Target Region: ${ob.targetRegion || 'N/A'}
     Sales Channels: ${JSON.stringify(ob.salesChannels) || 'N/A'}
     Social Media (from onboarding): ${JSON.stringify(ob.socialMediaPresence) || 'N/A'}
-    Ad Spend: ${ob.adSpendRange || 'N/A'}
+    Ad Spend (from onboarding): ${ob.adSpendRange || 'N/A'}
+        `;
+    }
+
+    // User-declared marketing context (from audit onboarding — THE USER TOLD US THIS)
+    let userMarketingContext = '';
+    if (input.paidAds || input.emailMarketing || input.crmTool || input.marketingObjective) {
+        userMarketingContext = `
+    ═══════════════════════════════════════════
+    DATOS DECLARADOS POR EL USUARIO (confiables, el usuario los ingresó):
+    ═══════════════════════════════════════════
+    Publicidad paga: ${input.paidAds?.active ? `SÍ — Plataformas: ${input.paidAds.platforms?.join(', ') || 'No especificó'}` : 'NO pauta'}
+    Presupuesto publicidad: ${input.adBudgetRange || 'No declarado'}
+    Email marketing: ${input.emailMarketing?.active ? `SÍ — Plataforma: ${input.emailMarketing.platform || 'No especificó'}` : 'NO hace email marketing'}
+    Recuperación de carritos: ${input.cartRecovery ? 'SÍ' : 'NO'}
+    CRM: ${input.crmTool?.active ? `SÍ — ${input.crmTool.name || 'No especificó cuál'}` : 'NO usa CRM'}
+    Objetivo principal: ${input.marketingObjective || 'No declarado'}
+    Equipo de marketing: ${input.marketingTeamSize || 'No declarado'}
+    ⚠️ ESTOS DATOS SON DEL USUARIO. NO los contradigas. Si el usuario dice que hace email marketing con Perfit, NO digas que "no hace email marketing".
+    ⚠️ USÁLOS para dar recomendaciones ajustadas a su presupuesto, equipo y objetivos.
         `;
     }
 
@@ -1371,6 +1463,42 @@ export const analyzeDigitalAudit = async (
         `;
     }
 
+    // Build SERP context
+    let serpContext = '';
+    if (input.serpData && input.serpData.length > 0) {
+        serpContext = `
+    ═══════════════════════════════════════════
+    DATOS REALES DE POSICIONAMIENTO EN GOOGLE (SERP):
+    ═══════════════════════════════════════════
+    Buscamos palabras clave reales en Google Argentina. Estos son los resultados exactos:
+    
+    ${input.serpData.map(s => {
+        let block = `    - Búsqueda: "${s.query}"\n`;
+        block += `      * Posición del usuario: ${s.userPosition ? `#${s.userPosition} (vía ${s.userMatchedBy})` : 'NO APARECE en el Top 10 ❌'}\n`;
+        if (s.competitorPositions && s.competitorPositions.length > 0) {
+            block += `      * Competidores detectados: ${s.competitorPositions.map(c => `${c.name} (#${c.position})`).join(', ')}\n`;
+        }
+        if (s.userInLocalPack) {
+            block += `      * ¡USUARIO APARECE EN LOCAL PACK (Mapa)!\n`;
+        }
+        if (s.organicResults && s.organicResults.length > 0) {
+            block += `      * Top 3 Resultados orgánicos:\n`;
+            s.organicResults.slice(0, 3).forEach(org => {
+                block += `        #${org.position} - ${org.title} (${org.url})\n`;
+                if (org.isFeaturedSnippet) block += `          (Este resultado es un FEATURED SNIPPET)\n`;
+            });
+        }
+        return block;
+    }).join('\n')}
+    
+    IMPORTANTE: USÁ ESTA INFORMACIÓN para redactar la sección 'seoAnalysis'.
+    Si el usuario no aparece, resáltalo en ROJO como Riesgo o en Oportunidades.
+    Si MercadoLibre u otro marketplace gana los primeros puestos, dáselo como Insight.
+    Si el competidor le gana, inclúyelo en el Competitor Benchmark.
+    ═══════════════════════════════════════════
+        `;
+    }
+
     const socialUrlsContext = [
         input.instagramUrl ? `Instagram: ${input.instagramUrl}` : null,
         input.tiktokUrl ? `TikTok: ${input.tiktokUrl}` : null,
@@ -1415,21 +1543,15 @@ export const analyzeDigitalAudit = async (
             block += `\n    IG Posts: ${c.igData.postsCount || '0'}`;
             block += `\n    IG Verificado: ${c.igData.isVerified ? 'Sí' : 'No'}`;
             block += `\n    IG Bio: ${c.igData.biography || 'Sin bio'}`;
-        }
-        if (c.fbData) {
-            block += `\n    Facebook: ${c.fbData.pageName}`;
-            block += `\n    FB Seguidores: ${c.fbData.followers?.toLocaleString() || '0'}`;
-            block += `\n    FB Likes: ${c.fbData.likes?.toLocaleString() || '0'}`;
-            block += `\n    FB Categoría: ${c.fbData.category || 'N/A'}`;
-        }
-        if (c.tiktokData) {
-            block += `\n    TikTok: @${c.tiktokData.username}`;
-            block += `\n    TT Seguidores: ${c.tiktokData.followers?.toLocaleString() || '0'}`;
-            block += `\n    TT Videos: ${c.tiktokData.videos || '0'}`;
-            block += `\n    TT Likes totales: ${c.tiktokData.likes?.toLocaleString() || '0'}`;
-        }
-        if (c.metaAdsData) {
-            block += `\n    Meta Ads: ${c.metaAdsData.isRunningAds ? `SÍ PAUTA ✅ (${c.metaAdsData.totalAds} anuncios activos)` : 'NO PAUTA ❌'}`;
+            // Include latest posts engagement for comparison
+            const igPosts = c.igData.latestPosts || [];
+            if (igPosts.length > 0) {
+                const avgLikes = Math.round(igPosts.reduce((sum: number, p: any) => sum + (p.likesCount || 0), 0) / igPosts.length);
+                const avgComments = Math.round(igPosts.reduce((sum: number, p: any) => sum + (p.commentsCount || 0), 0) / igPosts.length);
+                block += `\n    IG Engagement promedio: ${avgLikes} likes, ${avgComments} comentarios por post`;
+            }
+        } else {
+            block += `\n    Instagram: No encontrado`;
         }
         return block;
     }).join('\n\n    ')}
@@ -1480,6 +1602,7 @@ export const analyzeDigitalAudit = async (
     ${competitorDataContext}
     ${deepResearchContext}
     ${businessContext}
+    ${userMarketingContext}
     ${input.businessType ? `TIPO DE NEGOCIO: ${input.businessType === 'B2B' ? 'Vende a empresas (B2B)' : input.businessType === 'B2C' ? 'Vende a consumidor final (B2C)' : 'Vende a ambos (B2B + B2C)'}` : ''}
 
     ===================================================================
@@ -1501,6 +1624,21 @@ export const analyzeDigitalAudit = async (
     - No recomiendes cambios de SEO técnico que Tienda Nube no permita (ej: schema markup custom, server config).
     - SÍ recomendá lo que se puede hacer: títulos, descripciones, blog, Google Business, etc.
     Si no encontrás un dato en la investigación, poné "No verificado".
+
+    ⚠️ REGLA ANTI-AFIRMACIONES CATEGÓRICAS (MUY IMPORTANTE):
+    - NUNCA digas "no hace X" de forma categórica si NO tenés evidencia directa.
+    - En vez de "No hace email marketing" → "No encontramos evidencia de email marketing activo. Si usás alguna plataforma, mencionalo."
+    - En vez de "No tiene presencia humana" → "Basándonos en los datos disponibles, no pudimos confirmar contenido con presencia de personas."
+    - En vez de "No invierte en publicidad" → "No encontramos anuncios activos en Meta/Google Ads Library."
+    - Si el usuario DECLARÓ que hace algo (ver sección DATOS DECLARADOS), USALO como verdad.
+    - Si tenés datos SCRAPEADOS que confirman algo, USALOS como verdad.
+    - Si NO tenés datos, sé CAUTELOSO y usá lenguaje como "no pudimos verificar" o "no encontramos evidencia".
+    - EXCEPCIÓN: Si la investigación previa o el scraping CONFIRMAN explícitamente algo, podés ser categórico.
+
+    ⚠️ REGLA DE EQUIPO Y PRESUPUESTO:
+    - Si el usuario declaró que maneja el marketing solo, NO recomiendes contratar un equipo de 5 personas.
+    - Ajustá las recomendaciones al presupuesto y capacidad del usuario.
+    - Las recomendaciones deben ser REALIZABLES con los recursos declarados.
 
     TU AUDITORÍA DEBE INCLUIR TODAS ESTAS SECCIONES:
 
@@ -1569,6 +1707,12 @@ export const analyzeDigitalAudit = async (
     llmsTxt: { exists: boolean, recommendation: string }
     eeatScore: string
     aiCrawlerAccess: { blocked: string[], recommendation: string }
+    ⚠️ PARA CADA SUB-SECCIÓN, incluí PASOS CONCRETOS que el usuario pueda seguir:
+    - structuredData.recommendation → "Paso 1: Ir a tu panel de Tienda Nube > SEO. Paso 2: ..."
+    - qaContent.recommendation → "Creá una página de Preguntas Frecuentes con al menos 10 preguntas reales de tus clientes."
+    - llmsTxt.recommendation → "Creá un archivo llamado llms.txt en la raíz de tu sitio con: [template]"
+    - eeatScore → "Para mejorar tu E-E-A-T: 1. Agregá una página 'Sobre Nosotros' con fotos del equipo. 2. ..."
+    Las recomendaciones DEBEN ser ejecutables por una persona no técnica.
 
     ═══════════════════════════════════════════
     6. AUDITORÍA DE REDES SOCIALES (socialMediaAudit array)
@@ -1583,6 +1727,7 @@ export const analyzeDigitalAudit = async (
     - postingFrequency: string (ej: "3 posts por semana" o "Inactivo hace 2 meses")
     - recommendation: string con recomendación general
     - personaCrossRef: string conectando con buyer personas
+    - topPosts: array de objetos con los posts más exitosos de la cuenta (url, caption, likes, comments). OBLIGATORIO si hay datos reales provistos.
     
     🔥 NUEVO — ESTRATEGIA DE CONTENIDO (esto es lo que más valor agrega):
     - contentTypesRecommended: array de 3-5 strings con tipos de contenido ESPECÍFICOS al rubro.
@@ -1603,6 +1748,10 @@ export const analyzeDigitalAudit = async (
     - contentPillars: array de 3-4 strings con pilares de contenido.
       Ejemplo: ["Educativo (tutoriales y tips)", "Behind the scenes (tu proceso)", 
       "Social proof (clientes y testimonios)", "Producto (catálogo con contexto)"]
+    
+    ⚠️ OBLIGATORIO: incluí una entry para CADA plataforma donde el usuario tiene presencia.
+    Si tiene Facebook, TikTok, LinkedIn, YouTube → incluí CADA UNA con estrategia específica.
+    NO omitas ninguna red que tenga datos reales.
 
     ═══════════════════════════════════════════
     7. IDENTIDAD VISUAL DIGITAL (visualIdentityAudit) — NUEVO
@@ -1648,9 +1797,19 @@ export const analyzeDigitalAudit = async (
     - website: string (la URL que el usuario proporcionó)
     - whatTheyDoBetter: string — basándote en datos REALES, qué hacen mejor que el cliente
     - whatClientDoesBetter: string — basándote en datos REALES, qué hace mejor el cliente
+    - followers: string — número de seguidores (dato real scrapeado)
+    - engagementRate: string — tasa de interacción (dato real scrapeado)
+    - topPosts: array de objetos con sus posts más exitosos (url, caption, likes, comments). OBLIGATORIO si hay datos reales provistos.
     - contentStrategyGap: string — diferencia en estrategia de contenido basada en datos reales
     - keyTakeaway: string — qué puede aprender/copiar el cliente de este competidor
     PROHIBIDO dejar campos vacíos. Si no pudimos scrappear un dato, poné "No se pudo verificar".
+    
+    ⚠️ INTERPRETACIÓN PROFESIONAL OBLIGATORIA:
+    Para CADA competidor, incluí un campo 'professionalInterpretation' (string, 2-3 párrafos) con:
+    - Qué podés aprender de este competidor
+    - Qué errores están cometiendo que VOS podrías explotar
+    - Recomendación concreta de acción basada en la comparación
+    Escribí como un consultor de marketing que le habla a su cliente.
 
     ═══════════════════════════════════════════
     11. EMAIL & CRM (emailCrmAssessment)
@@ -1903,7 +2062,7 @@ function buildAuditResponseSchema() {
             },
             socialMediaAudit: {
                 type: Type.ARRAY,
-                items: { type: Type.OBJECT, properties: { platform: { type: Type.STRING }, status: { type: Type.STRING }, followers: { type: Type.STRING }, engagementRate: { type: Type.STRING }, postingFrequency: { type: Type.STRING }, recommendation: { type: Type.STRING }, personaCrossRef: { type: Type.STRING }, contentTypesRecommended: { type: Type.ARRAY, items: { type: Type.STRING } }, aestheticRecommendation: { type: Type.STRING }, postingSchedule: { type: Type.STRING }, contentPillars: { type: Type.ARRAY, items: { type: Type.STRING } } } }
+                items: { type: Type.OBJECT, properties: { platform: { type: Type.STRING }, status: { type: Type.STRING }, followers: { type: Type.STRING }, engagementRate: { type: Type.STRING }, postingFrequency: { type: Type.STRING }, recommendation: { type: Type.STRING }, personaCrossRef: { type: Type.STRING }, topPosts: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { url: { type: Type.STRING }, caption: { type: Type.STRING }, likes: { type: Type.STRING }, comments: { type: Type.STRING } } } }, contentTypesRecommended: { type: Type.ARRAY, items: { type: Type.STRING } }, aestheticRecommendation: { type: Type.STRING }, postingSchedule: { type: Type.STRING }, contentPillars: { type: Type.ARRAY, items: { type: Type.STRING } } } }
             },
             visualIdentityAudit: {
                 type: Type.OBJECT,
@@ -1919,7 +2078,7 @@ function buildAuditResponseSchema() {
             },
             competitorBenchmark: {
                 type: Type.ARRAY,
-                items: { type: Type.OBJECT, properties: { competitorName: { type: Type.STRING }, website: { type: Type.STRING }, whatTheyDoBetter: { type: Type.STRING }, whatClientDoesBetter: { type: Type.STRING }, contentStrategyGap: { type: Type.STRING }, keyTakeaway: { type: Type.STRING } } }
+                items: { type: Type.OBJECT, properties: { competitorName: { type: Type.STRING }, website: { type: Type.STRING }, followers: { type: Type.STRING }, engagementRate: { type: Type.STRING }, whatTheyDoBetter: { type: Type.STRING }, whatClientDoesBetter: { type: Type.STRING }, contentStrategyGap: { type: Type.STRING }, keyTakeaway: { type: Type.STRING }, professionalInterpretation: { type: Type.STRING }, topPosts: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { url: { type: Type.STRING }, caption: { type: Type.STRING }, likes: { type: Type.STRING }, comments: { type: Type.STRING } } } } } }
             },
             emailCrmAssessment: {
                 type: Type.OBJECT,

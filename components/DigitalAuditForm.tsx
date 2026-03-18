@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
     ArrowRight, ArrowLeft, Loader2, Sparkles, Globe, Wand2,
     Briefcase, Search, CheckCircle, ExternalLink, AlertTriangle,
-    PlusCircle, Edit3, Trash2, Users, ShoppingBag
+    PlusCircle, Edit3, Trash2, Users, ShoppingBag, Megaphone
 } from 'lucide-react';
 import { DigitalAuditInput, DigitalPreScanResult, StrategicAnalysis, Language } from '../types';
 import { scrapeWebsite, WebScraperResult } from '../services/digitalAuditService';
@@ -34,6 +34,7 @@ type FormStep = 'url' | 'scanning' | 'review' | 'competitors';
 export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAnalysis, parentOnboarding, parentBusinessName }: DigitalAuditFormProps) {
     const [step, setStep] = useState<FormStep>('url');
     const [scanError, setScanError] = useState<string | null>(null);
+    const [showCompetitorErrors, setShowCompetitorErrors] = useState(false);
 
     // URL inputs
     const [mainUrl, setMainUrl] = useState('');
@@ -51,13 +52,25 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
     const [marketplaces, setMarketplaces] = useState<{ platform: string; storeName: string }[]>([]);
 
     // Competitors
-    const [competitors, setCompetitors] = useState<{ name: string; website: string }[]>([
-        { name: '', website: '' }
+    const [competitors, setCompetitors] = useState<{ name: string; website: string; instagramUrl: string }[]>([
+        { name: '', website: '', instagramUrl: '' }
     ]);
 
     // Scraper results
     const [scraperData, setScraperData] = useState<WebScraperResult | null>(null);
     const [preScanData, setPreScanData] = useState<DigitalPreScanResult | null>(null);
+
+    // Marketing context (user-declared)
+    const [paidAdsActive, setPaidAdsActive] = useState(false);
+    const [paidAdsPlatforms, setPaidAdsPlatforms] = useState<string[]>([]);
+    const [adBudgetRange, setAdBudgetRange] = useState('');
+    const [emailMarketingActive, setEmailMarketingActive] = useState(false);
+    const [emailMarketingPlatform, setEmailMarketingPlatform] = useState('');
+    const [cartRecovery, setCartRecovery] = useState(false);
+    const [crmActive, setCrmActive] = useState(false);
+    const [crmName, setCrmName] = useState('');
+    const [marketingObjective, setMarketingObjective] = useState('');
+    const [marketingTeamSize, setMarketingTeamSize] = useState('');
 
     // Derive business type from parent analysis (no need to ask again)
     const businessType: 'B2B' | 'B2C' | 'both' = React.useMemo(() => {
@@ -141,7 +154,7 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
 
     const addCompetitor = () => {
         if (competitors.length < 5) {
-            setCompetitors([...competitors, { name: '', website: '' }]);
+            setCompetitors([...competitors, { name: '', website: '', instagramUrl: '' }]);
         }
     };
 
@@ -151,7 +164,7 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
         }
     };
 
-    const updateCompetitor = (index: number, field: 'name' | 'website', value: string) => {
+    const updateCompetitor = (index: number, field: 'name' | 'website' | 'instagramUrl', value: string) => {
         const updated = [...competitors];
         updated[index] = { ...updated[index], [field]: value };
         setCompetitors(updated);
@@ -169,12 +182,20 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
             youtubeUrl: youtubeUrl || undefined,
             xUrl: xUrl || undefined,
             pinterestUrl: pinterestUrl || undefined,
-            googleMapsUrl: googlePlaceId ? `place_id:${googlePlaceId}` : (googleMapsQuery || undefined),
+            googleMapsUrl: googlePlaceId ? `https://www.google.com/maps/place/?q=place_id:${googlePlaceId}` : (googleMapsQuery || undefined),
             marketplaces: marketplaces.filter(m => m.platform.trim()).length > 0 ? marketplaces.filter(m => m.platform.trim()) : undefined,
             businessType,
-            competitors: validCompetitors.length > 0 ? validCompetitors : undefined,
+            competitors: validCompetitors.length > 0 ? validCompetitors.map(c => ({ name: c.name, website: c.website, instagramUrl: c.instagramUrl || undefined })) : undefined,
             preScanData: preScanData || undefined,
             scraperData: scraperData || undefined,
+            // User-declared marketing context
+            paidAds: { active: paidAdsActive, platforms: paidAdsPlatforms.length > 0 ? paidAdsPlatforms : undefined },
+            adBudgetRange: adBudgetRange || undefined,
+            emailMarketing: { active: emailMarketingActive, platform: emailMarketingPlatform || undefined },
+            cartRecovery,
+            crmTool: { active: crmActive, name: crmName || undefined },
+            marketingObjective: marketingObjective || undefined,
+            marketingTeamSize: marketingTeamSize || undefined,
         };
         onComplete(auditInput);
     };
@@ -452,7 +473,9 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
                         <p className="text-sm font-bold text-slate-700">
                             {lang === 'es' ? 'Google Maps / Perfil de Negocio' : 'Google Maps / Business Profile'}
                         </p>
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">⭐ {lang === 'es' ? 'Recomendado' : 'Recommended'}</span>
                     </div>
+                    <p className="text-xs text-slate-400 mb-2">{lang === 'es' ? 'Nos permite analizar tus reseñas, rating y percepción del cliente.' : 'Allows us to analyze your reviews, rating and customer perception.'}</p>
                     <input
                         ref={googleInputRef}
                         type="text"
@@ -507,7 +530,7 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
                                     <input
                                         type="text"
                                         className="flex-1 px-3 py-2.5 rounded-xl border border-slate-300 focus:border-emerald-500 outline-none text-sm"
-                                        placeholder={lang === 'es' ? 'Nombre de tu tienda (opcional)' : 'Store name (optional)'}
+                                        placeholder={lang === 'es' ? 'URL de tu perfil o tienda (ej: mercadolibre.com.ar/perfil/TUTIENDA)' : 'Your store profile URL'}
                                         value={mp.storeName}
                                         onChange={(e) => {
                                             const updated = [...marketplaces];
@@ -532,6 +555,120 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
                     >
                         <PlusCircle size={14} /> {lang === 'es' ? 'Agregar marketplace' : 'Add marketplace'}
                     </button>
+                </div>
+
+                {/* Marketing Context Card */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-6 space-y-4">
+                    <div className="flex items-center gap-2">
+                        <Megaphone size={16} className="text-slate-500" />
+                        <p className="text-sm font-bold text-slate-700">
+                            {lang === 'es' ? 'Sobre tu marketing' : 'About your marketing'}
+                        </p>
+                        <span className="text-xs text-slate-400">
+                            {lang === 'es' ? '(nos ayuda a darte recomendaciones precisas)' : '(helps us give you precise recommendations)'}
+                        </span>
+                    </div>
+
+                    {/* Paid Ads */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500">{lang === 'es' ? '💰 ¿Hacés publicidad paga?' : '💰 Do you run paid ads?'}</label>
+                        <div className="flex gap-3">
+                            <button onClick={() => setPaidAdsActive(true)} className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${paidAdsActive ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'}`}>Sí</button>
+                            <button onClick={() => { setPaidAdsActive(false); setPaidAdsPlatforms([]); }} className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${!paidAdsActive ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'}`}>No</button>
+                        </div>
+                        {paidAdsActive && (
+                            <div className="space-y-2 ml-1">
+                                <p className="text-xs text-slate-400">{lang === 'es' ? '¿En cuáles plataformas?' : 'Which platforms?'}</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {['Meta (FB/IG)', 'Google Ads', 'TikTok Ads', 'LinkedIn Ads', 'Otra'].map(p => (
+                                        <button key={p} onClick={() => setPaidAdsPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${paidAdsPlatforms.includes(p) ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'}`}
+                                        >{p}</button>
+                                    ))}
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-400 mb-1">{lang === 'es' ? 'Presupuesto mensual aprox.' : 'Monthly budget approx.'}</p>
+                                    <select value={adBudgetRange} onChange={e => setAdBudgetRange(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:border-emerald-500 w-full">
+                                        <option value="">{lang === 'es' ? 'Seleccioná...' : 'Select...'}</option>
+                                        <option value="<$100">Menos de $100 USD</option>
+                                        <option value="$100-$500">$100 - $500 USD</option>
+                                        <option value="$500-$2000">$500 - $2,000 USD</option>
+                                        <option value="$2000+">Más de $2,000 USD</option>
+                                        <option value="no_sabe">{lang === 'es' ? 'No sé / Prefiero no decir' : 'Don\'t know'}</option>
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Email Marketing */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500">📧 {lang === 'es' ? '¿Hacés email marketing?' : 'Do you do email marketing?'}</label>
+                        <div className="flex gap-3">
+                            <button onClick={() => setEmailMarketingActive(true)} className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${emailMarketingActive ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'}`}>Sí</button>
+                            <button onClick={() => { setEmailMarketingActive(false); setEmailMarketingPlatform(''); }} className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${!emailMarketingActive ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'}`}>No</button>
+                        </div>
+                        {emailMarketingActive && (
+                            <select value={emailMarketingPlatform} onChange={e => setEmailMarketingPlatform(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:border-emerald-500 w-full">
+                                <option value="">{lang === 'es' ? '¿Qué plataforma usás?' : 'Which platform?'}</option>
+                                <option value="Mailchimp">Mailchimp</option>
+                                <option value="Perfit">Perfit</option>
+                                <option value="Brevo">Brevo (ex Sendinblue)</option>
+                                <option value="Klaviyo">Klaviyo</option>
+                                <option value="Doppler">Doppler</option>
+                                <option value="ActiveCampaign">ActiveCampaign</option>
+                                <option value="HubSpot">HubSpot</option>
+                                <option value="Otra">{lang === 'es' ? 'Otra' : 'Other'}</option>
+                            </select>
+                        )}
+                    </div>
+
+                    {/* Cart Recovery + CRM row */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500">🛒 {lang === 'es' ? '¿Recuperás carritos abandonados?' : 'Cart recovery?'}</label>
+                            <div className="flex gap-3">
+                                <button onClick={() => setCartRecovery(true)} className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${cartRecovery ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'}`}>Sí</button>
+                                <button onClick={() => setCartRecovery(false)} className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${!cartRecovery ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'}`}>No</button>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500">📋 {lang === 'es' ? '¿Usás CRM?' : 'Do you use a CRM?'}</label>
+                            <div className="flex gap-3">
+                                <button onClick={() => setCrmActive(true)} className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${crmActive ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'}`}>Sí</button>
+                                <button onClick={() => { setCrmActive(false); setCrmName(''); }} className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${!crmActive ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'}`}>No</button>
+                            </div>
+                            {crmActive && (
+                                <input type="text" value={crmName} onChange={e => setCrmName(e.target.value)} placeholder={lang === 'es' ? '¿Cuál? (ej: HubSpot, Clientify...)' : 'Which one?'}
+                                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:border-emerald-500" />
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Objective + Team */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500">🎯 {lang === 'es' ? 'Objetivo principal' : 'Main objective'}</label>
+                            <select value={marketingObjective} onChange={e => setMarketingObjective(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:border-emerald-500 w-full">
+                                <option value="">{lang === 'es' ? 'Seleccioná...' : 'Select...'}</option>
+                                <option value="mas_ventas">{lang === 'es' ? 'Vender más' : 'Increase sales'}</option>
+                                <option value="mas_seguidores">{lang === 'es' ? 'Crecer en redes' : 'Grow social media'}</option>
+                                <option value="posicionar_marca">{lang === 'es' ? 'Posicionar mi marca' : 'Brand positioning'}</option>
+                                <option value="lanzamiento">{lang === 'es' ? 'Lanzar producto/servicio' : 'Product launch'}</option>
+                                <option value="fidelizar">{lang === 'es' ? 'Fidelizar clientes' : 'Customer retention'}</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500">👥 {lang === 'es' ? '¿Quién maneja tu marketing?' : 'Who manages your marketing?'}</label>
+                            <select value={marketingTeamSize} onChange={e => setMarketingTeamSize(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:border-emerald-500 w-full">
+                                <option value="">{lang === 'es' ? 'Seleccioná...' : 'Select...'}</option>
+                                <option value="solo">{lang === 'es' ? 'Yo solo/a' : 'Just me'}</option>
+                                <option value="1-2_personas">{lang === 'es' ? '1-2 personas' : '1-2 people'}</option>
+                                <option value="equipo">{lang === 'es' ? 'Equipo de marketing (+3)' : 'Marketing team (+3)'}</option>
+                                <option value="agencia">{lang === 'es' ? 'Agencia externa' : 'External agency'}</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Navigation */}
@@ -602,49 +739,71 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
             </div>
 
             {/* Competitor inputs */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-6 space-y-4">
+            <div data-competitor-section className={`bg-white rounded-2xl border p-6 mb-6 space-y-4 transition-all ${showCompetitorErrors && validCompetitors.length === 0 ? 'border-red-300 shadow-red-100 shadow-md' : 'border-slate-200'}`}>
                 <div className="flex items-center justify-between">
                     <p className="text-sm font-bold text-slate-700 flex items-center gap-2">
                         <ShoppingBag size={16} className="text-slate-500" />
                         {lang === 'es' ? 'Competidores directos' : 'Direct competitors'}
+                        <span className="text-red-500 text-xs">*</span>
                     </p>
-                    <span className="text-xs text-slate-400">
-                        {lang === 'es' ? `${validCompetitors.length} de mín. 1` : `${validCompetitors.length} of min. 1`}
+                    <span className={`text-xs font-semibold ${validCompetitors.length > 0 ? 'text-emerald-600' : showCompetitorErrors ? 'text-red-500' : 'text-slate-400'}`}>
+                        {validCompetitors.length > 0
+                            ? (lang === 'es' ? `✓ ${validCompetitors.length} competidor${validCompetitors.length > 1 ? 'es' : ''} cargado${validCompetitors.length > 1 ? 's' : ''}` : `✓ ${validCompetitors.length} loaded`)
+                            : (lang === 'es' ? 'Mínimo 1 obligatorio' : 'Minimum 1 required')}
                     </span>
                 </div>
 
                 <div className="space-y-3">
-                    {competitors.map((comp, i) => (
-                        <div key={i} className="flex gap-3 items-start">
-                            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0 mt-1">
-                                <span className="text-sm font-black text-slate-500">{i + 1}</span>
+                    {competitors.map((comp, i) => {
+                        const nameEmpty = showCompetitorErrors && !comp.name.trim();
+                        const websiteEmpty = showCompetitorErrors && !comp.website.trim();
+                        return (
+                            <div key={i} className="flex gap-3 items-start">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1 ${showCompetitorErrors && (!comp.name.trim() || !comp.website.trim()) ? 'bg-red-100' : 'bg-slate-100'}`}>
+                                    <span className={`text-sm font-black ${showCompetitorErrors && (!comp.name.trim() || !comp.website.trim()) ? 'text-red-500' : 'text-slate-500'}`}>{i + 1}</span>
+                                </div>
+                                <div className="flex-1 space-y-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <div>
+                                            <input
+                                                type="text"
+                                                className={`w-full px-4 py-3 rounded-xl border outline-none text-sm transition-all ${nameEmpty ? 'border-red-400 bg-red-50/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/10' : 'border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10'}`}
+                                                placeholder={lang === 'es' ? 'Nombre del competidor *' : 'Competitor name *'}
+                                                value={comp.name}
+                                                onChange={(e) => { updateCompetitor(i, 'name', e.target.value); if (showCompetitorErrors) setShowCompetitorErrors(false); }}
+                                            />
+                                            {nameEmpty && <p className="text-xs text-red-500 mt-1 ml-1 font-medium">{lang === 'es' ? 'Completá el nombre' : 'Enter name'}</p>}
+                                        </div>
+                                        <div>
+                                            <input
+                                                type="url"
+                                                className={`w-full px-4 py-3 rounded-xl border outline-none text-sm transition-all ${websiteEmpty ? 'border-red-400 bg-red-50/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/10' : 'border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10'}`}
+                                                placeholder={lang === 'es' ? 'https://www.competidor.com *' : 'https://www.competitor.com *'}
+                                                value={comp.website}
+                                                onChange={(e) => { updateCompetitor(i, 'website', e.target.value); if (showCompetitorErrors) setShowCompetitorErrors(false); }}
+                                            />
+                                            {websiteEmpty && <p className="text-xs text-red-500 mt-1 ml-1 font-medium">{lang === 'es' ? 'Completá la URL' : 'Enter URL'}</p>}
+                                        </div>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-purple-200 bg-purple-50/30 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 outline-none text-sm transition-all"
+                                        placeholder={lang === 'es' ? '📸 @instagram del competidor (opcional — mejora la comparación)' : '📸 @competitor instagram (optional)'}
+                                        value={comp.instagramUrl}
+                                        onChange={(e) => updateCompetitor(i, 'instagramUrl', e.target.value)}
+                                    />
+                                </div>
+                                {competitors.length > 1 && (
+                                    <button
+                                        onClick={() => removeCompetitor(i)}
+                                        className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0 mt-1 hover:bg-red-100 transition text-red-500"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                )}
                             </div>
-                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <input
-                                    type="text"
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 outline-none text-sm transition-all"
-                                    placeholder={lang === 'es' ? 'Nombre del competidor' : 'Competitor name'}
-                                    value={comp.name}
-                                    onChange={(e) => updateCompetitor(i, 'name', e.target.value)}
-                                />
-                                <input
-                                    type="url"
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 outline-none text-sm transition-all"
-                                    placeholder="https://www.competidor.com"
-                                    value={comp.website}
-                                    onChange={(e) => updateCompetitor(i, 'website', e.target.value)}
-                                />
-                            </div>
-                            {competitors.length > 1 && (
-                                <button
-                                    onClick={() => removeCompetitor(i)}
-                                    className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0 mt-1 hover:bg-red-100 transition text-red-500"
-                                >
-                                    <Trash2 size={14} />
-                                </button>
-                            )}
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 {competitors.length < 5 && (
@@ -682,21 +841,42 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
             </div>
 
             {/* Navigation */}
-            <div className="mt-8 flex items-center justify-between">
-                <button
-                    onClick={() => setStep('review')}
-                    className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 flex items-center gap-2"
-                >
-                    <ArrowLeft size={18} /> {lang === 'es' ? 'Atrás' : 'Back'}
-                </button>
-                <button
-                    onClick={handleSubmit}
-                    disabled={validCompetitors.length === 0}
-                    className="px-8 py-4 rounded-2xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 text-white flex items-center gap-3 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all text-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-                >
-                    <Sparkles size={22} />
-                    {lang === 'es' ? 'Continuar al pago' : 'Continue to payment'}
-                </button>
+            <div className="mt-8 flex flex-col gap-3">
+                {showCompetitorErrors && validCompetitors.length === 0 && (
+                    <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl font-medium text-sm flex items-center gap-2 animate-fade-in">
+                        <AlertTriangle size={16} className="flex-shrink-0" />
+                        {lang === 'es'
+                            ? 'Completá al menos 1 competidor con nombre y website para continuar. Sin esto no podemos comparar tu presencia digital.'
+                            : 'Fill in at least 1 competitor with name and website to continue.'}
+                    </div>
+                )}
+                <div className="flex items-center justify-between">
+                    <button
+                        onClick={() => setStep('review')}
+                        className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 flex items-center gap-2"
+                    >
+                        <ArrowLeft size={18} /> {lang === 'es' ? 'Atrás' : 'Back'}
+                    </button>
+                    <button
+                        onClick={() => {
+                            if (validCompetitors.length === 0) {
+                                setShowCompetitorErrors(true);
+                                // Scroll to the competitor inputs
+                                document.querySelector('[data-competitor-section]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                return;
+                            }
+                            handleSubmit();
+                        }}
+                        className={`px-8 py-4 rounded-2xl font-bold flex items-center gap-3 shadow-lg transition-all text-lg ${
+                            validCompetitors.length === 0
+                                ? 'bg-gradient-to-r from-slate-400 to-slate-500 text-white/80 cursor-pointer hover:from-slate-500 hover:to-slate-600'
+                                : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:-translate-y-1 hover:shadow-xl'
+                        }`}
+                    >
+                        <Sparkles size={22} />
+                        {lang === 'es' ? 'Continuar al pago' : 'Continue to payment'}
+                    </button>
+                </div>
             </div>
         </div>
     );

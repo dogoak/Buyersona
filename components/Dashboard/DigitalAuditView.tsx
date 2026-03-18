@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../services/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
@@ -7,7 +7,7 @@ import {
     BarChart3, TrendingUp, AlertTriangle, CheckCircle2,
     Download, Zap, Star, Clock, Target, Mail,
     ChevronDown, ChevronUp, ExternalLink, Bot,
-    MessageCircle, Filter, Palette, Users, LayoutDashboard, Megaphone, UsersRound, ShoppingCart
+    MessageCircle, Filter, Palette, Users, LayoutDashboard, Megaphone, UsersRound, ShoppingCart, Heart
 } from 'lucide-react';
 import { analyzeDigitalAudit } from '../../services/digitalAuditService';
 import GlossaryModal from '../GlossaryModal';
@@ -238,7 +238,9 @@ export default function DigitalAuditView() {
     const [generatingStep, setGeneratingStep] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<DigitalAuditResult | null>(null);
+    const [auditInput, setAuditInput] = useState<DigitalAuditInput | null>(null);
     const [auditName, setAuditName] = useState('');
+    const generationLock = useRef(false);
 
     useEffect(() => {
         if (!user || !reportId) return;
@@ -257,16 +259,62 @@ export default function DigitalAuditView() {
                 setAuditName((data as any).business_reports?.business_name || 'Auditoría Digital');
 
                 if (data.status === 'completed' && data.audit_result) {
+                    setAuditInput(data.audit_input as DigitalAuditInput);
                     setResult(safeResult(data.audit_result));
                     setLoading(false);
                     return;
                 }
 
-                if (data.status === 'pending' || data.status === 'draft' || data.status === 'analyzing') {
+                // If already analyzing, show generating UI and poll for completion
+                if (data.status === 'analyzing') {
                     setLoading(false);
                     setGenerating(true);
+                    setGeneratingStep('Otra pestaña está generando el informe...');
+                    // Poll every 5s until completed
+                    const poll = setInterval(async () => {
+                        const { data: updated } = await supabase
+                            .from('digital_audits')
+                            .select('status, audit_result, audit_input')
+                            .eq('id', reportId)
+                            .single();
+                        if (updated?.status === 'completed' && updated.audit_result) {
+                            clearInterval(poll);
+                            setAuditInput(updated.audit_input as DigitalAuditInput);
+                            setResult(safeResult(updated.audit_result));
+                            setGenerating(false);
+                        } else if (updated?.status === 'failed') {
+                            clearInterval(poll);
+                            setError('La auditoría falló. Intentá de nuevo desde el Dashboard.');
+                            setGenerating(false);
+                        }
+                    }, 5000);
+                    return;
+                }
 
-                    await supabase.from('digital_audits').update({ status: 'analyzing' }).eq('id', reportId);
+                if (data.status === 'pending' || data.status === 'draft') {
+                    // Mutex: prevent concurrent generation in same tab (React StrictMode)
+                    if (generationLock.current) return;
+                    generationLock.current = true;
+
+                    // Atomic claim: only proceed if we're the one who flips the status
+                    const { data: claimData, error: claimError } = await supabase
+                        .from('digital_audits')
+                        .update({ status: 'analyzing' })
+                        .eq('id', reportId)
+                        .in('status', ['pending', 'draft'])
+                        .select('id');
+
+                    if (claimError || !claimData || claimData.length === 0) {
+                        // Another process already claimed it — switch to polling
+                        generationLock.current = false;
+                        setLoading(false);
+                        setGenerating(true);
+                        setGeneratingStep('El informe se está generando...');
+                        return;
+                    }
+
+                    setLoading(false);
+                    setGenerating(true);
 
                     setGeneratingStep('Cargando contexto del negocio...');
 
@@ -294,8 +342,10 @@ export default function DigitalAuditView() {
                         api_cost_usd: costUsd
                     }).eq('id', reportId);
 
+                    setAuditInput(auditInput);
                     setResult(safeResult(aiResult));
                     setGenerating(false);
+                    generationLock.current = false;
                     return;
                 }
 
@@ -303,9 +353,10 @@ export default function DigitalAuditView() {
 
             } catch (err: any) {
                 console.error(err);
-                if (generating) {
+                if (generationLock.current) {
                     try { await supabase.from('digital_audits').update({ status: 'failed' }).eq('id', reportId); } catch (_) { }
                 }
+                generationLock.current = false;
                 setError(err.message || 'Error al cargar la auditoría');
                 setLoading(false);
                 setGenerating(false);
@@ -412,39 +463,152 @@ export default function DigitalAuditView() {
         );
     }
 
+    // ── SVG Gauge Component ────────────────────────────────────────────
+    const ScoreGauge = ({ score, size = 160, label }: { score: number; size?: number; label?: string }) => {
+        const radius = (size - 20) / 2;
+        const circumference = 2 * Math.PI * radius;
+        const pct = Math.min(Math.max(score, 0), 100);
+        const offset = circumference - (pct / 100) * circumference;
+        const color = pct >= 70 ? '#34d399' : pct >= 40 ? '#fbbf24' : '#f87171';
+        return (
+            <div className="flex flex-col items-center">
+                <svg width={size} height={size} className="transform -rotate-90">
+                    <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="12" />
+                    <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={color} strokeWidth="12" strokeLinecap="round"
+                        strokeDasharray={circumference} strokeDashoffset={offset}
+                        style={{ transition: 'stroke-dashoffset 1.5s ease-out' }} />
+                </svg>
+                <div className="absolute flex flex-col items-center justify-center" style={{ width: size, height: size }}>
+                    <span className="text-5xl font-black text-white">{pct}</span>
+                    <span className="text-sm text-slate-400 font-bold">/100</span>
+                </div>
+                {label && <span className="text-xs text-slate-400 mt-2 font-semibold uppercase tracking-wider">{label}</span>}
+            </div>
+        );
+    };
+
+    // ── KPI Card Component ──────────────────────────────────────────────
+    const KpiCard = ({ label, score, icon, explanation }: { label: string; score: any; icon: React.ReactNode; explanation: string }) => {
+        const numScore = typeof score === 'number' ? score : (typeof score === 'string' ? ({'good': 80, 'ready': 80, 'strong': 85, 'active': 75, 'needs_work': 50, 'partial': 45, 'moderate': 55, 'mixed': 50, 'basic': 40, 'critical': 20, 'invisible': 10, 'weak': 25, 'absent': 0}[score] ?? 50) : 50);
+        const color = numScore >= 70 ? 'emerald' : numScore >= 40 ? 'amber' : 'red';
+        const statusLabel = numScore >= 70 ? 'Bien' : numScore >= 40 ? 'A mejorar' : 'Crítico';
+        return (
+            <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-4 hover:border-white/20 transition group relative">
+                <div className="flex items-center gap-2 mb-3">
+                    <div className={`w-8 h-8 rounded-lg bg-${color}-500/20 flex items-center justify-center`}>{icon}</div>
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{label}</span>
+                </div>
+                <div className="flex items-end gap-2 mb-2">
+                    <span className={`text-3xl font-black text-${color}-400`}>{typeof score === 'number' ? score : numScore}</span>
+                    <span className={`text-xs font-bold text-${color}-400 mb-1 px-2 py-0.5 rounded-full bg-${color}-500/20`}>{statusLabel}</span>
+                </div>
+                <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full bg-${color}-500 transition-all duration-1000`} style={{ width: `${Math.min(numScore, 100)}%` }} />
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">{explanation}</p>
+            </div>
+        );
+    };
+
+    // ── Info Tooltip Component ───────────────────────────────────────────
+    const InfoTip = ({ text }: { text: string }) => (
+        <span className="inline-flex items-center gap-1 text-xs text-slate-500 bg-slate-800/60 px-2.5 py-1 rounded-lg border border-white/5 mt-1">
+            <span className="text-emerald-400">💡</span> {text}
+        </span>
+    );
+
+    // ── Section Header ──────────────────────────────────────────────────
+    const SectionHeader = ({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) => (
+        <div className="flex items-start gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">{icon}</div>
+            <div>
+                <h2 className="text-xl font-black text-white tracking-tight">{title}</h2>
+                <p className="text-sm text-slate-400 mt-0.5">{subtitle}</p>
+            </div>
+        </div>
+    );
+
+    // ── Severity Card ───────────────────────────────────────────────────
+    const SeverityCard = ({ finding }: { finding: CriticalFinding }) => {
+        const styles = {
+            critical: { border: 'border-red-500/40', bg: 'bg-red-500/10', dot: 'bg-red-500', label: 'CRÍTICO', labelBg: 'bg-red-500/20 text-red-400' },
+            warning: { border: 'border-amber-500/40', bg: 'bg-amber-500/10', dot: 'bg-amber-500', label: 'A MEJORAR', labelBg: 'bg-amber-500/20 text-amber-400' },
+            opportunity: { border: 'border-emerald-500/40', bg: 'bg-emerald-500/10', dot: 'bg-emerald-500', label: 'OPORTUNIDAD', labelBg: 'bg-emerald-500/20 text-emerald-400' },
+        };
+        const s = styles[finding.severity] || styles.warning;
+        const effortLabels: Record<string, string> = { quick_fix: '⚡ <1 hora', medium: '🔧 1-7 días', major: '🏗️ Especialista' };
+        return (
+            <div className={`rounded-2xl border ${s.border} ${s.bg} p-5 backdrop-blur-sm hover:scale-[1.01] transition-transform`}>
+                <div className="flex items-center gap-2 flex-wrap mb-3">
+                    <div className={`w-2.5 h-2.5 rounded-full ${s.dot}`} />
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${s.labelBg}`}>{s.label}</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-400">{(finding.area || 'General').replace(/_/g, ' ')}</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-slate-500">{effortLabels[finding.effort] || finding.effort}</span>
+                </div>
+                <h4 className="text-base font-bold text-white mb-2">{finding.title}</h4>
+                <p className="text-sm text-slate-300 leading-relaxed mb-3">{finding.diagnosis}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                    <div className="p-2.5 bg-white/5 rounded-xl">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">¿Por qué importa?</span>
+                        <p className="text-xs text-slate-300">{finding.whyItMatters}</p>
+                    </div>
+                    <div className="p-2.5 bg-white/5 rounded-xl">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">💰 Impacto</span>
+                        <p className="text-xs text-white font-bold">{finding.moneyImpact}</p>
+                    </div>
+                </div>
+                <div className="p-2.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase block mb-1">🛠️ Solución</span>
+                    <p className="text-xs text-emerald-200 leading-relaxed">{finding.fix}</p>
+                </div>
+            </div>
+        );
+    };
+
     // ── MAIN REPORT ──────────────────────────────────────────────────
     return (
-        <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
-            <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-                {/* Back + PDF */}
-                <div className="flex items-center justify-between">
-                    <button onClick={() => navigate('/dashboard')} className="group inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-800 transition">
+        <div className="min-h-screen bg-slate-950 font-sans flex flex-col">
+            {/* Print styles override for light background */}
+            <style>{`@media print { .bg-slate-950 { background: white !important; } .text-white { color: #1e293b !important; } .text-slate-300, .text-slate-400, .text-slate-500 { color: #475569 !important; } .bg-slate-900\\/80, .bg-slate-900 { background: #f8fafc !important; border: 1px solid #e2e8f0 !important; } .border-white\\/10 { border-color: #e2e8f0 !important; } }`}</style>
+
+            <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+                {/* ── TOP BAR ────────────────────────────────────────────── */}
+                <div className="flex items-center justify-between print:hidden">
+                    <button onClick={() => navigate('/dashboard')} className="group inline-flex items-center gap-2 text-sm font-semibold text-slate-400 hover:text-white transition">
                         <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
                         Volver al Dashboard
                     </button>
-                    <button onClick={() => window.print()} className="flex items-center gap-1.5 px-4 py-2 bg-white text-slate-700 rounded-xl text-sm font-semibold border border-slate-200 hover:bg-slate-50 hover:shadow transition print:hidden">
-                        <Download size={14} /> PDF
+                    <button onClick={() => window.print()} className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-sm font-semibold border border-white/10 hover:bg-slate-700 hover:text-white transition">
+                        <Download size={14} /> Descargar PDF
                     </button>
                 </div>
 
-                {/* ── HERO HEADER ──────────────────────────────────────────── */}
-                <div className="bg-gradient-to-br from-emerald-900 via-teal-900 to-slate-900 rounded-3xl p-8 sm:p-12 text-white shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full filter blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                    <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/10 rounded-full filter blur-3xl translate-y-1/2 -translate-x-1/2"></div>
-                    <div className="relative z-10 flex flex-col sm:flex-row sm:items-center gap-6">
-                        <GradeBadge grade={safeText(result.digitalHealthGrade)} />
-                        <div className="flex-1">
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-xs font-bold text-emerald-200 uppercase tracking-widest mb-3">
-                                <Search size={14} />
-                                Auditoría de Presencia Digital
+                {/* ══════════════════════════════════════════════════════════
+                    HERO — Score Gauge + Grade + Business Name
+                ══════════════════════════════════════════════════════════ */}
+                <div className="bg-gradient-to-br from-slate-900 via-emerald-950/50 to-slate-900 rounded-3xl p-8 sm:p-12 border border-white/10 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full filter blur-[120px]" />
+                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-teal-500/5 rounded-full filter blur-[100px]" />
+                    <div className="relative z-10 flex flex-col lg:flex-row items-center gap-8">
+                        {/* Gauge */}
+                        <div className="relative flex-shrink-0">
+                            <ScoreGauge score={result.snapshot?.digitalMaturityScore ?? 0} size={180} />
+                        </div>
+                        {/* Info */}
+                        <div className="flex-1 text-center lg:text-left">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-[10px] font-bold text-emerald-300 uppercase tracking-widest mb-3">
+                                <Search size={12} /> Auditoría de Presencia Digital
                             </div>
-                            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">{auditName}</h1>
-                            <div className="flex items-center gap-3 flex-wrap">
-                                <span className="text-4xl font-black text-emerald-300">{result.snapshot?.digitalMaturityScore ?? 'N/A'}/100</span>
-                                <span className="text-emerald-200 text-base font-semibold">Puntuación de Madurez Digital</span>
+                            <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight mb-2">{auditName}</h1>
+                            <div className="flex items-center gap-3 flex-wrap justify-center lg:justify-start mb-4">
+                                <GradeBadge grade={safeText(result.digitalHealthGrade)} />
+                                <div>
+                                    <span className="text-emerald-300 text-sm font-bold block">Grado de Salud Digital</span>
+                                    <InfoTip text="Esta nota resume el estado general de tu presencia online. A = excelente, F = necesita trabajo urgente." />
+                                </div>
                             </div>
                             {result.snapshot?.scoreExplanation && (
-                                <p className="mt-4 text-emerald-100/90 text-base leading-relaxed bg-white/10 rounded-xl px-5 py-4 border border-white/10">
+                                <p className="text-slate-300 text-sm leading-relaxed bg-white/5 rounded-xl px-5 py-3 border border-white/10 max-w-2xl">
                                     {safeText(result.snapshot.scoreExplanation)}
                                 </p>
                             )}
@@ -452,1005 +616,829 @@ export default function DigitalAuditView() {
                     </div>
                 </div>
 
-                {/* ── SCORE BREAKDOWN ──────────────────────────────────────── */}
-                {result.snapshot?.scoreBreakdown && <RadarChart breakdown={result.snapshot.scoreBreakdown} />}
-
-                {/* ── EXECUTIVE SUMMARY ────────────────────────────────────── */}
-                <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm">
-                    <h3 className="font-black text-lg text-slate-900 mb-4 flex items-center gap-2">
-                        <Sparkles size={20} className="text-emerald-500" />
-                        Resumen Ejecutivo
-                    </h3>
-                    <div className="text-base text-slate-700 leading-relaxed font-medium">
-                        <p className="whitespace-pre-line">{safeText(result.executiveSummary) || 'N/A'}</p>
-                    </div>
-                </div>
-
-                {/* ── MONEY ON THE TABLE ───────────────────────────────────── */}
-                <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-6 sm:p-8 text-white shadow-lg">
-                    <h3 className="text-xl font-black mb-3 flex items-center gap-2">
-                        💰 Plata Sobre la Mesa
-                    </h3>
-                    <div className="text-amber-100 leading-relaxed font-medium">
-                        {Array.isArray(result.moneyOnTheTable) ? (
-                            <ul className="list-disc list-inside space-y-2 text-base">
-                                {result.moneyOnTheTable.map((item: any, i: number) => (
-                                    <li key={i}>
-                                        <strong className="text-white">{safeText(item.area)}:</strong> {safeText(item.description)}
-                                        {item.estimatedLoss && <span className="ml-1 text-white opacity-90 font-bold">({safeText(item.estimatedLoss)})</span>}
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (
-                            <p className="whitespace-pre-line text-base">{safeText(result.moneyOnTheTable) || 'N/A'}</p>
-                        )}
-                    </div>
-                </div>
-
-                {/* ── CRITICAL FINDINGS (heart of the report) ──────────────── */}
-                {result.findings && result.findings.length > 0 && (
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-3 mb-2">
-                            <h2 className="text-2xl font-black text-slate-900">
-                                🔍 Hallazgos Clave
-                            </h2>
-                            <span className="text-sm text-slate-500">
-                                {result.findings.filter(f => f.severity === 'critical').length > 0 &&
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold mr-2">
-                                        🔴 {result.findings.filter(f => f.severity === 'critical').length} críticos
-                                    </span>
-                                }
-                                {result.findings.filter(f => f.severity === 'warning').length > 0 &&
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold mr-2">
-                                        🟡 {result.findings.filter(f => f.severity === 'warning').length} a mejorar
-                                    </span>
-                                }
-                                {result.findings.filter(f => f.severity === 'opportunity').length > 0 &&
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">
-                                        🟢 {result.findings.filter(f => f.severity === 'opportunity').length} oportunidades
-                                    </span>
-                                }
-                            </span>
+                {/* ══════════════════════════════════════════════════════════
+                    KPI SCORECARDS — 6 pillars breakdown
+                ══════════════════════════════════════════════════════════ */}
+                {result.snapshot?.scoreBreakdown && (() => {
+                    const b = result.snapshot.scoreBreakdown;
+                    const cards = [
+                        { label: 'Web', score: b.web ?? 0, icon: <Globe size={16} className="text-blue-400" />, explanation: 'Velocidad, seguridad y funcionalidad de tu sitio web' },
+                        { label: 'SEO', score: b.seo ?? 0, icon: <Search size={16} className="text-green-400" />, explanation: 'Qué tan fácil te encuentran en Google cuando buscan lo que vendés' },
+                        { label: 'Redes', score: b.redesSociales ?? b.socialMedia ?? b.social ?? 0, icon: <TrendingUp size={16} className="text-pink-400" />, explanation: 'Tu presencia, engagement y estrategia en redes sociales' },
+                        { label: 'Reputación', score: b.reputacion ?? b.reputation ?? 0, icon: <Star size={16} className="text-amber-400" />, explanation: 'Reseñas, comentarios y qué opinan de vos online' },
+                        { label: 'Email/CRM', score: b.emailCrm ?? b.email ?? 0, icon: <Mail size={16} className="text-cyan-400" />, explanation: 'Si capturás datos de tus visitantes y les hacés seguimiento' },
+                        { label: 'IA (AEO)', score: b.iaReadiness ?? b.aiReadiness ?? 0, icon: <Bot size={16} className="text-violet-400" />, explanation: 'Si tu negocio aparece cuando la gente le pregunta a ChatGPT, Gemini, etc.' },
+                    ];
+                    return (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                            {cards.map((c, i) => <div key={i}><KpiCard label={c.label} score={c.score} icon={c.icon} explanation={c.explanation} /></div>)}
                         </div>
-                        <p className="text-sm text-slate-500 -mt-1 mb-4">
-                            Estos son los problemas y oportunidades más importantes que encontramos. Cada uno incluye por qué importa, cuánto te puede costar, y qué hacer al respecto.
-                        </p>
-                        {result.findings
-                            .sort((a, b) => {
-                                const order = { critical: 0, warning: 1, opportunity: 2 };
-                                return (order[a.severity] || 2) - (order[b.severity] || 2);
-                            })
-                            .map((finding, i) => {
-                                const severityStyles = {
-                                    critical: { border: 'border-red-300', bg: 'bg-red-50', icon: '🔴', label: 'CRÍTICO', labelBg: 'bg-red-100 text-red-700' },
-                                    warning: { border: 'border-amber-300', bg: 'bg-amber-50', icon: '🟡', label: 'A MEJORAR', labelBg: 'bg-amber-100 text-amber-700' },
-                                    opportunity: { border: 'border-emerald-300', bg: 'bg-emerald-50', icon: '🟢', label: 'OPORTUNIDAD', labelBg: 'bg-emerald-100 text-emerald-700' },
-                                };
-                                const style = severityStyles[finding.severity] || severityStyles.warning;
-                                const effortLabels: Record<string, string> = {
-                                    quick_fix: '⚡ Rápido (< 1 hora)',
-                                    medium: '🔧 Medio (1-7 días)',
-                                    major: '🏗️ Requiere especialista',
-                                };
-                                return (
-                                    <div key={i} className={`rounded-2xl border-2 ${style.border} ${style.bg} p-5 sm:p-6 hover:shadow-md transition`}>
-                                        <div className="flex items-start gap-3 mb-3">
-                                            <span className="text-2xl mt-0.5">{style.icon}</span>
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2 flex-wrap mb-1">
-                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${style.labelBg}`}>{style.label}</span>
-                                                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-600">{(finding.area || 'General').replace(/_/g, ' ')}</span>
-                                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-white text-slate-500 border border-slate-200">{effortLabels[finding.effort] || finding.effort}</span>
-                                                </div>
-                                                <h4 className="text-lg font-bold text-slate-900">{finding.title}</h4>
-                                            </div>
-                                        </div>
-                                        <div className="ml-10 space-y-3">
-                                            <div>
-                                                <p className="text-sm text-slate-700 leading-relaxed">{finding.diagnosis}</p>
-                                            </div>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                <div className="p-3 bg-white/80 rounded-xl">
-                                                    <span className="text-xs font-bold text-slate-400 uppercase block mb-1">
-                                                        💡 ¿Por qué importa?
-                                                    </span>
-                                                    <p className="text-sm text-slate-700">{finding.whyItMatters}</p>
-                                                </div>
-                                                <div className="p-3 bg-white/80 rounded-xl">
-                                                    <span className="text-xs font-bold text-slate-400 uppercase block mb-1">
-                                                        💰 Impacto estimado
-                                                    </span>
-                                                    <p className="text-sm font-bold text-slate-900">{finding.moneyImpact}</p>
-                                                </div>
-                                            </div>
-                                            <div className="p-3 bg-white/80 rounded-xl border border-slate-200">
-                                                <span className="text-xs font-bold text-emerald-600 uppercase block mb-1">
-                                                    🛠️ Cómo solucionarlo
-                                                </span>
-                                                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{finding.fix}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                    </div>
-                )}
+                    );
+                })()}
 
-                {/* ── COLLAPSIBLE SECTIONS ─────────────────────────────────── */}
-
-                {/* Web Technical */}
-                <CollapsibleSection title="🌐 Auditoría Web Técnica" icon={<Globe size={20} className="text-emerald-600" />} defaultOpen badge={<TrafficLight score={result.webTechnical.overallScore} />}>
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-3 gap-3">
-                            {[{ label: 'SSL', ok: result.webTechnical.ssl }, { label: 'Sitemap', ok: result.webTechnical.sitemap }, { label: 'robots.txt', ok: result.webTechnical.robotsTxt }].map((item, i) => (
-                                <div key={i} className={`flex items-center gap-2 p-3 rounded-xl ${item.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'} font-bold text-sm`}>
-                                    {item.ok ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />} {item.label}
-                                </div>
-                            ))}
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="p-4 bg-slate-50 rounded-xl"><span className="text-xs font-bold text-slate-400 block mb-1">Page Speed</span><p className="font-bold text-slate-900">{result.webTechnical.pageSpeedScore}</p></div>
-                            <div className="p-4 bg-slate-50 rounded-xl"><span className="text-xs font-bold text-slate-400 block mb-1">Mobile</span><p className="font-bold text-slate-900">{result.webTechnical.mobileReadiness}</p></div>
-                        </div>
-                        {result.webTechnical.detectedTools.length > 0 && (
-                            <div><span className="text-xs font-bold text-slate-400 uppercase mb-2 block">Herramientas Detectadas</span>
-                                <div className="flex flex-wrap gap-2">{result.webTechnical.detectedTools.map((t, i) => <span key={i} className="px-3 py-1.5 bg-slate-100 rounded-lg text-sm font-medium text-slate-700">{t.name} — {t.status}</span>)}</div>
-                            </div>
-                        )}
-                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200"><span className="text-xs font-bold text-slate-400 block mb-1">Conversión</span><p className="text-base text-slate-700">{safeText(result.webTechnical?.conversionReadyAudit?.details) || 'N/A'}</p></div>
-                        <div className="p-4 bg-slate-50 rounded-xl"><span className="text-xs font-bold text-slate-400 block mb-1">Schema Markup</span><p className="text-sm text-slate-700">{result.webTechnical?.schemaMarkup?.recommendation || 'N/A'}</p></div>
-                    </div>
-                </CollapsibleSection>
-
-                {/* SEO */}
-                <CollapsibleSection title="🔍 SEO (Cómo te encuentra la gente en Google)" icon={<Search size={20} className="text-emerald-600" />} badge={<TrafficLight score={result.seoAnalysis.overallScore} />}>
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="p-4 bg-slate-50 rounded-xl"><span className="text-xs font-bold text-slate-400 block mb-1">Blog</span><p className="text-sm font-medium text-slate-700">{result.seoAnalysis?.blogStatus || 'N/A'}</p></div>
-                            <div className="p-4 bg-slate-50 rounded-xl"><span className="text-xs font-bold text-slate-400 block mb-1">Meta Tags</span><p className="text-sm font-medium text-slate-700">{result.seoAnalysis?.metaTagsStatus || 'N/A'}</p></div>
-                        </div>
-                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200"><span className="text-xs font-bold text-slate-400 block mb-1">Análisis de Keywords</span><p className="text-base text-slate-700">{safeText(result.seoAnalysis?.keywordGapAnalysis) || 'N/A'}</p></div>
-                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200"><span className="text-xs font-bold text-slate-400 block mb-1">Autoridad del Contenido</span><p className="text-base text-slate-700">{safeText(result.seoAnalysis?.contentAuthorityScore) || 'N/A'}</p></div>
-                        {/* Product Naming Issues */}
-                        {result.seoAnalysis.productNamingIssues && result.seoAnalysis.productNamingIssues.length > 0 && (
-                            <div className="p-4 bg-orange-50 rounded-xl border border-orange-200">
-                                <span className="text-xs font-bold text-orange-600 block mb-3 uppercase">
-                                    🏷️ Nombres de Productos con Problemas de SEO
+                {/* ══════════════════════════════════════════════════════════
+                    PLATFORM PRESENCE OVERVIEW
+                ══════════════════════════════════════════════════════════ */}
+                {(() => {
+                    const platforms = [
+                        { name: 'Instagram', emoji: '📸', active: !!result.socialMediaAudit?.find((p: any) => p.platform?.toLowerCase().includes('instagram')), url: auditInput?.instagramUrl },
+                        { name: 'Facebook', emoji: '📘', active: !!result.socialMediaAudit?.find((p: any) => p.platform?.toLowerCase().includes('facebook')), url: auditInput?.facebookUrl },
+                        { name: 'TikTok', emoji: '🎵', active: !!result.socialMediaAudit?.find((p: any) => p.platform?.toLowerCase().includes('tiktok')), url: auditInput?.tiktokUrl },
+                        { name: 'LinkedIn', emoji: '💼', active: !!result.socialMediaAudit?.find((p: any) => p.platform?.toLowerCase().includes('linkedin')), url: auditInput?.linkedinUrl },
+                        { name: 'YouTube', emoji: '▶️', active: !!result.socialMediaAudit?.find((p: any) => p.platform?.toLowerCase().includes('youtube')), url: auditInput?.youtubeUrl },
+                        { name: 'X/Twitter', emoji: '✒️', active: !!result.socialMediaAudit?.find((p: any) => ['x', 'twitter'].some(t => p.platform?.toLowerCase().includes(t))), url: auditInput?.xUrl },
+                        { name: 'Pinterest', emoji: '📌', active: !!result.socialMediaAudit?.find((p: any) => p.platform?.toLowerCase().includes('pinterest')), url: auditInput?.pinterestUrl },
+                        { name: 'Google Maps', emoji: '📍', active: !!(result.socialProof?.googleRating || result.socialProof?.googleReviewsAnalysis?.averageRating || result.reputationAnalysis?.googleRating), url: auditInput?.googleMapsUrl },
+                        { name: 'Meta Ads', emoji: '📢', active: !!(result.adStrategy?.metaAds?.isRunning || result.adStrategy?.recommendedPlatforms?.length > 0 || (typeof result.adStrategy === 'string' && result.adStrategy.includes('Meta'))), url: null },
+                        { name: 'Google Ads', emoji: '🔍', active: !!(result.adStrategy?.googleAds?.isRunning || (typeof result.adStrategy === 'string' && result.adStrategy.includes('Google'))), url: null },
+                    ];
+                    const activeCount = platforms.filter(p => p.active).length;
+                    return (
+                        <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-5">
+                            <div className="flex items-center justify-between mb-4">
+                                <span className="text-sm font-bold text-white flex items-center gap-2">
+                                    <Globe size={16} className="text-emerald-400" /> Presencia por Plataforma
                                 </span>
-                                <div className="space-y-2">
-                                    {result.seoAnalysis.productNamingIssues.map((issue, i) => (
-                                        <div key={i} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-orange-100">
-                                            <span className="text-red-500 font-bold text-sm mt-0.5">✗</span>
-                                            <div className="flex-1">
-                                                <p className="text-sm font-mono font-bold text-red-700">{issue.currentName}</p>
-                                                <p className="text-xs text-slate-500 my-1">{issue.problem}</p>
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-green-500 font-bold text-sm">→</span>
-                                                    <p className="text-sm font-medium text-green-700">{issue.suggestedName}</p>
+                                <span className="text-xs font-bold text-emerald-400 bg-emerald-500/20 px-2.5 py-1 rounded-full">
+                                    {activeCount} de {platforms.length} activas
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+                                {platforms.map((p, i) => {
+                                    const Component = p.url ? 'a' : 'div';
+                                    const hrefProps = p.url ? { href: typeof p.url === 'string' && p.url.startsWith('http') ? p.url : `https://${p.url}`, target: "_blank", rel: "noopener noreferrer" } : {};
+                                    return (
+                                        <Component key={i} {...hrefProps} className={`group relative flex flex-col items-center gap-1 p-2 rounded-xl transition ${p.active ? 'bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20' : 'bg-white/5 border border-white/5 opacity-40'} ${p.url ? 'cursor-pointer hover:opacity-100' : ''}`}>
+                                            <span className="text-lg">{p.emoji}</span>
+                                            <span className="text-[9px] font-bold text-slate-400 text-center leading-tight">{p.name}</span>
+                                            <span className={`text-[10px] font-black ${p.active ? 'text-emerald-400' : 'text-slate-600'}`}>{p.active ? '✓' : '✗'}</span>
+                                            
+                                            {/* Tooltip */}
+                                            {p.url && (
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded border border-slate-700 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-10 shadow-xl max-w-[200px] overflow-hidden text-ellipsis">
+                                                    {p.url.replace(/^https?:\/\/(www\.)?/, '')}
                                                 </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                            )}
+                                        </Component>
+                                    );
+                                })}
                             </div>
-                        )}
-                        {result.seoAnalysis?.localSeoCheck && <div className="p-4 bg-blue-50 rounded-xl border border-blue-200"><span className="text-xs font-bold text-blue-500 block mb-1">SEO Local</span><p className="text-base text-blue-900">{safeText(result.seoAnalysis.localSeoCheck?.localReviewSummary) || 'N/A'}</p></div>}
-                    </div>
-                </CollapsibleSection>
+                            <InfoTip text="Las plataformas marcadas son aquellas donde encontramos presencia activa o anuncios. Si falta alguna, podés agregarla en el onboarding para incluirla en futuros informes." />
+                        </div>
+                    );
+                })()}
 
-                {/* AI READINESS */}
-                <CollapsibleSection title="🤖 SEO para IAs (AEO — Vanguardia)" icon={<Bot size={20} className="text-emerald-600" />} defaultOpen badge={<TrafficLight score={result.aiReadiness.overallScore} />}>
-                    <div className="space-y-4">
-                        <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200">
-                            <p className="text-base text-emerald-900 leading-relaxed">{safeText(result.aiReadiness?.summary) || 'Análisis de AI-readiness no disponible.'}</p>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {[
-                                { label: 'Datos Estructurados (Schema)', desc: 'Etiquetas invisibles que ayudan a las IAs', value: result.aiReadiness?.structuredData?.detected ? '🟢' : '🔴', detail: safeText(result.aiReadiness?.structuredData?.recommendation) },
-                                { label: 'Contenido Q&A', desc: 'Respuestas directas para IAs', value: result.aiReadiness?.qaContent?.hasQaFormat ? '🟢' : '🔴', detail: safeText(result.aiReadiness?.qaContent?.recommendation) },
-                                { label: 'llms.txt', desc: 'Manual para bots de IA', value: result.aiReadiness?.llmsTxt?.exists ? '🟢' : '🔴', detail: safeText(result.aiReadiness?.llmsTxt?.recommendation) },
-                                { label: 'E-E-A-T', desc: 'Experiencia, autoridad, confianza', value: '📊', detail: safeText(result.aiReadiness?.eeatScore) },
-                            ].map((item, i) => (
-                                <div key={i} className="p-4 bg-white rounded-xl border border-slate-200">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-lg">{item.value}</span>
-                                        <span className="text-sm font-bold text-slate-800">{item.label}</span>
+                {/* ══════════════════════════════════════════════════════════
+                    EXECUTIVE SUMMARY
+                ══════════════════════════════════════════════════════════ */}
+                <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                    <SectionHeader icon={<Sparkles size={20} className="text-emerald-400" />} title="Resumen Ejecutivo" subtitle="Lo más importante que necesitás saber sobre tu presencia digital" />
+                    <p className="text-slate-300 text-base leading-relaxed whitespace-pre-line">{safeText(result.executiveSummary) || 'N/A'}</p>
+                </div>
+
+                {/* ══════════════════════════════════════════════════════════
+                    MONEY ON THE TABLE
+                ══════════════════════════════════════════════════════════ */}
+                <div className="bg-gradient-to-r from-amber-600/20 to-orange-600/20 rounded-2xl p-6 sm:p-8 border border-amber-500/30 backdrop-blur-sm">
+                    <SectionHeader icon={<Zap size={20} className="text-amber-400" />} title="💰 Plata Sobre la Mesa" subtitle="Oportunidades de ingreso que estás dejando pasar por no tener optimizada tu presencia digital" />
+                    <div className="space-y-3">
+                        {Array.isArray(result.moneyOnTheTable) ? (
+                            result.moneyOnTheTable.map((item: any, i: number) => (
+                                <div key={i} className="flex items-start gap-3 p-4 bg-white/5 rounded-xl border border-white/10">
+                                    <span className="text-2xl">💸</span>
+                                    <div className="flex-1">
+                                        <span className="text-amber-300 font-bold text-sm">{safeText(item.area)}</span>
+                                        <p className="text-slate-300 text-sm mt-1">{safeText(item.description)}</p>
+                                        {item.estimatedLoss && <span className="text-amber-400 font-black text-base mt-1 block">{safeText(item.estimatedLoss)}</span>}
                                     </div>
-                                    <p className="text-xs text-slate-400 mb-2">{item.desc}</p>
-                                    <p className="text-xs text-slate-600">{item.detail}</p>
                                 </div>
-                            ))}
-                        </div>
-                        {result.aiReadiness.aiCrawlerAccess.blocked.length > 0 && (
-                            <div className="p-4 bg-red-50 rounded-xl border border-red-200">
-                                <span className="text-xs font-bold text-red-600 block mb-1">⚠️ Bots de IA BLOQUEADOS</span>
-                                <p className="text-sm text-red-800">{result.aiReadiness.aiCrawlerAccess.blocked.join(', ')}</p>
-                                <p className="text-xs text-red-600 mt-1">{result.aiReadiness.aiCrawlerAccess.recommendation}</p>
-                            </div>
+                            ))
+                        ) : (
+                            <p className="text-slate-300 whitespace-pre-line">{safeText(result.moneyOnTheTable) || 'N/A'}</p>
                         )}
                     </div>
-                </CollapsibleSection>
+                </div>
 
-                {/* Social Media */}
-                <CollapsibleSection title="📱 Redes Sociales" icon={<TrendingUp size={20} className="text-emerald-600" />} defaultOpen>
-                    <div className="space-y-6">
-                        {result.socialMediaAudit.map((channel: any, i: number) => (
-                            <div key={i} className="rounded-2xl border-2 border-slate-200 bg-white overflow-hidden hover:shadow-md transition">
-                                {/* Header */}
-                                <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-b border-slate-200">
-                                    <h4 className="font-black text-slate-900 text-xl">{safeText(channel.platform)}</h4>
-                                    <TrafficLight score={channel.status} />
+                {/* ══════════════════════════════════════════════════════════
+                    CRITICAL FINDINGS
+                ══════════════════════════════════════════════════════════ */}
+                {result.findings && result.findings.length > 0 && (
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<AlertTriangle size={20} className="text-amber-400" />} title="🔍 Hallazgos Clave" subtitle="Los problemas y oportunidades más importantes. Cada uno incluye por qué importa y cómo solucionarlo." />
+                        <div className="flex flex-wrap gap-2 mb-6">
+                            {result.findings.filter(f => f.severity === 'critical').length > 0 && (
+                                <span className="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-full text-xs font-bold">🔴 {result.findings.filter(f => f.severity === 'critical').length} críticos</span>
+                            )}
+                            {result.findings.filter(f => f.severity === 'warning').length > 0 && (
+                                <span className="px-3 py-1.5 bg-amber-500/20 text-amber-400 rounded-full text-xs font-bold">🟡 {result.findings.filter(f => f.severity === 'warning').length} a mejorar</span>
+                            )}
+                            {result.findings.filter(f => f.severity === 'opportunity').length > 0 && (
+                                <span className="px-3 py-1.5 bg-emerald-500/20 text-emerald-400 rounded-full text-xs font-bold">🟢 {result.findings.filter(f => f.severity === 'opportunity').length} oportunidades</span>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {result.findings
+                                .sort((a, b) => ({ critical: 0, warning: 1, opportunity: 2 }[a.severity] ?? 2) - ({ critical: 0, warning: 1, opportunity: 2 }[b.severity] ?? 2))
+                                .map((finding, i) => <div key={i}><SeverityCard finding={finding} /></div>)}
+                        </div>
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════
+                    WEB TECHNICAL — Dashboard Style
+                ══════════════════════════════════════════════════════════ */}
+                <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                    <SectionHeader icon={<Globe size={20} className="text-blue-400" />} title="🌐 Auditoría Web Técnica" subtitle="El estado técnico de tu sitio web — si funciona rápido, es seguro y está bien armado para vender" />
+                    <div className="grid grid-cols-3 gap-3 mb-4">
+                        {[
+                            { label: 'SSL (Candado)', ok: result.webTechnical.ssl, tip: 'El candadito verde que aparece en el navegador. Sin esto, Google marca tu sitio como "No seguro" y los clientes desconfían.' },
+                            { label: 'Sitemap', ok: result.webTechnical.sitemap, tip: 'Es como un mapa de tu sitio para Google. Sin esto, Google puede tardar más en encontrar tus páginas.' },
+                            { label: 'robots.txt', ok: result.webTechnical.robotsTxt, tip: 'Un archivo que le dice a Google qué puede ver y qué no de tu sitio.' },
+                        ].map((item, i) => (
+                            <div key={i} className={`p-3 rounded-xl border ${item.ok ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                                <div className="flex items-center gap-2 mb-1">
+                                    {item.ok ? <CheckCircle2 size={16} className="text-emerald-400" /> : <AlertTriangle size={16} className="text-red-400" />}
+                                    <span className={`text-sm font-bold ${item.ok ? 'text-emerald-300' : 'text-red-300'}`}>{item.label}</span>
                                 </div>
-                                <div className="p-6 space-y-5">
-                                    {/* Stats */}
-                                    <div className="grid grid-cols-3 gap-3 text-center">
-                                        <div className="p-3 bg-slate-50 rounded-xl">
-                                            <span className="text-xs text-slate-400 block mb-1">Seguidores</span>
-                                            <span className="text-lg font-black text-slate-900">{safeText(channel.followers)}</span>
-                                        </div>
-                                        <div className="p-3 bg-slate-50 rounded-xl">
-                                            <span className="text-xs text-slate-400 block mb-1">Engagement</span>
-                                            <span className="text-lg font-black text-slate-900">{safeText(channel.engagementRate)}</span>
-                                        </div>
-                                        <div className="p-3 bg-slate-50 rounded-xl">
-                                            <span className="text-xs text-slate-400 block mb-1">Frecuencia</span>
-                                            <span className="text-lg font-black text-slate-900">{safeText(channel.postingFrequency)}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Recommendation */}
-                                    <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
-                                        <span className="text-xs font-bold text-emerald-600 uppercase block mb-2">💡 Recomendación</span>
-                                        <p className="text-base text-emerald-900 leading-relaxed">{safeText(channel.recommendation)}</p>
-                                    </div>
-
-                                    {/* Content Types Recommended */}
-                                    {channel.contentTypesRecommended && Array.isArray(channel.contentTypesRecommended) && channel.contentTypesRecommended.length > 0 && (
-                                        <div className="p-4 bg-violet-50 rounded-xl border border-violet-200">
-                                            <span className="text-xs font-bold text-violet-600 uppercase block mb-3">🎬 Tipos de Contenido Recomendados</span>
-                                            <div className="space-y-2">
-                                                {channel.contentTypesRecommended.map((ct: any, j: number) => (
-                                                    <div key={j} className="flex items-start gap-2">
-                                                        <span className="text-violet-500 mt-1">▸</span>
-                                                        <p className="text-base text-violet-900">{safeText(ct)}</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Content Pillars */}
-                                    {channel.contentPillars && Array.isArray(channel.contentPillars) && channel.contentPillars.length > 0 && (
-                                        <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
-                                            <span className="text-xs font-bold text-blue-600 uppercase block mb-3">🏛️ Pilares de Contenido</span>
-                                            <div className="flex flex-wrap gap-2">
-                                                {channel.contentPillars.map((pillar: any, j: number) => (
-                                                    <span key={j} className="px-4 py-2 bg-white rounded-lg text-sm font-semibold text-blue-800 border border-blue-200 shadow-sm">
-                                                        {safeText(pillar)}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Aesthetic Recommendation */}
-                                    {channel.aestheticRecommendation && (
-                                        <div className="p-4 bg-pink-50 rounded-xl border border-pink-200">
-                                            <span className="text-xs font-bold text-pink-600 uppercase block mb-2">🎨 Estética Visual Recomendada</span>
-                                            <p className="text-base text-pink-900 leading-relaxed">{safeText(channel.aestheticRecommendation)}</p>
-                                        </div>
-                                    )}
-
-                                    {/* Posting Schedule */}
-                                    {channel.postingSchedule && (
-                                        <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
-                                            <span className="text-xs font-bold text-amber-600 uppercase block mb-2">📅 Calendario de Publicación</span>
-                                            <p className="text-base text-amber-900 leading-relaxed font-medium">{safeText(channel.postingSchedule)}</p>
-                                        </div>
-                                    )}
-
-                                    {/* Persona Cross Reference */}
-                                    {channel.personaCrossRef && (
-                                        <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-200">
-                                            <span className="text-xs font-bold text-indigo-600 block mb-2">🎯 Conexión con tus Buyer Personas</span>
-                                            <p className="text-base text-indigo-900">{safeText(channel.personaCrossRef)}</p>
-                                        </div>
-                                    )}
-                                </div>
+                                <p className="text-[10px] text-slate-500 leading-tight">{item.tip}</p>
                             </div>
                         ))}
                     </div>
-                </CollapsibleSection>
-
-                {/* Reputation */}
-                <CollapsibleSection title="⭐ Reputación Online" icon={<Star size={20} className="text-emerald-600" />} badge={<TrafficLight score={result.reputationAnalysis?.overallSentiment ?? result.reputationAnalysis?.overallScore ?? 0} />}>
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-4 p-5 bg-amber-50 rounded-xl border border-amber-200">
-                            <span className="text-4xl">⭐</span>
-                            <div>
-                                <p className="font-black text-3xl text-slate-900">{safeText(result.reputationAnalysis?.googleReviews?.rating ?? result.reputationAnalysis?.googleRating ?? 'N/A')}</p>
-                                <p className="text-base text-slate-600">{safeText(result.reputationAnalysis?.googleReviews?.count ?? result.reputationAnalysis?.googleReviewCount ?? '?')} reseñas — {safeText(result.reputationAnalysis?.googleReviews?.trend)}</p>
-                            </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/10"><span className="text-[10px] text-slate-500 block mb-1">Velocidad</span><span className="text-lg font-black text-white">{result.webTechnical.pageSpeedScore}</span><p className="text-[10px] text-slate-500">Qué tan rápido carga tu web</p></div>
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/10"><span className="text-[10px] text-slate-500 block mb-1">Celular</span><span className="text-lg font-black text-white">{result.webTechnical.mobileReadiness}</span><p className="text-[10px] text-slate-500">Si se ve bien en el celular</p></div>
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/10"><span className="text-[10px] text-slate-500 block mb-1">Conversión</span><span className="text-sm font-bold text-white">{safeText(result.webTechnical?.conversionReadyAudit?.details) || 'N/A'}</span><p className="text-[10px] text-slate-500">Si tu web está lista para vender</p></div>
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/10"><span className="text-[10px] text-slate-500 block mb-1">Schema</span><span className="text-sm font-bold text-white">{result.webTechnical?.schemaMarkup?.exists ? '✅ Tiene' : '❌ No tiene'}</span><p className="text-[10px] text-slate-500">Etiquetas invisibles que ayudan a Google a entender tu negocio</p></div>
+                    </div>
+                    {result.webTechnical.detectedTools.length > 0 && (
+                        <div className="mt-3">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase block mb-2">Herramientas Detectadas en tu Web</span>
+                            <div className="flex flex-wrap gap-2">{result.webTechnical.detectedTools.map((t, i) => <span key={i} className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs font-medium text-slate-300">{t.name}</span>)}</div>
                         </div>
-                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200"><span className="text-xs font-bold text-slate-400 block mb-2">Tasa de Respuesta a Reseñas</span><p className="font-bold text-lg text-slate-900">{safeText(result.reputationAnalysis?.responseRate) || 'N/A'}</p></div>
-                    </div>
-                </CollapsibleSection>
+                    )}
+                </div>
 
-                {/* Competitors */}
-                <CollapsibleSection title="🎯 Benchmark vs Competidores" icon={<Target size={20} className="text-emerald-600" />} defaultOpen>
-                    <div className="space-y-5">
-                        {result.competitorBenchmark.map((comp: any, i: number) => (
-                            <div key={i} className="rounded-2xl border-2 border-slate-200 bg-white overflow-hidden hover:shadow-md transition">
-                                <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-b border-slate-200">
-                                    <h4 className="font-black text-lg text-slate-900">{safeText(comp.competitorName)}</h4>
-                                    {comp.website && <a href={typeof comp.website === 'string' && comp.website.startsWith('http') ? comp.website : `https://${comp.website}`} target="_blank" rel="noopener noreferrer" className="text-emerald-600 text-sm hover:underline flex items-center gap-1"><ExternalLink size={14} /> Web</a>}
-                                </div>
-                                <div className="p-6 space-y-4">
-                                    <div className="p-4 bg-red-50 rounded-xl border border-red-200">
-                                        <span className="text-xs font-bold text-red-600 uppercase block mb-2">❌ Qué hacen mejor que vos</span>
-                                        <p className="text-base text-red-900 leading-relaxed">{safeText(comp.whatTheyDoBetter)}</p>
-                                    </div>
-                                    <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
-                                        <span className="text-xs font-bold text-emerald-600 uppercase block mb-2">✅ Qué hacés mejor vos</span>
-                                        <p className="text-base text-emerald-900 leading-relaxed">{safeText(comp.whatClientDoesBetter)}</p>
-                                    </div>
-                                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
-                                        <span className="text-xs font-bold text-blue-600 uppercase block mb-2">📊 Diferencia en Estrategia de Contenido</span>
-                                        <p className="text-base text-blue-900 leading-relaxed">{safeText(comp.contentStrategyGap)}</p>
-                                    </div>
-                                    <div className="p-4 bg-violet-50 rounded-xl border border-violet-200">
-                                        <span className="text-xs font-bold text-violet-600 uppercase block mb-2">💡 Qué podés copiar / aprender</span>
-                                        <p className="text-base text-violet-900 leading-relaxed font-medium">{safeText(comp.keyTakeaway)}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </CollapsibleSection>
-
-                {/* Industry Leaders / Referentes */}
-                {result.industryLeaders && result.industryLeaders.length > 0 && (
-                    <CollapsibleSection title="🏆 Referentes del Rubro" icon={<Star size={20} className="text-emerald-600" />} defaultOpen>
-                        <div className="space-y-5">
-                            <p className="text-base text-slate-600 -mt-2 mb-2">
-                                Estos son los referentes más destacados de tu rubro. Estudiá sus estrategias para inspirarte y encontrar oportunidades.
-                            </p>
-                            {result.industryLeaders.map((leader: any, i: number) => (
-                                <div key={i} className="bg-gradient-to-br from-slate-50 to-emerald-50/30 rounded-2xl border-2 border-slate-200 p-6 hover:shadow-md transition">
-                                    <div className="flex items-start justify-between mb-4">
+                {/* ══════════════════════════════════════════════════════════
+                    SEO — Search Engine Optimization
+                ══════════════════════════════════════════════════════════ */}
+                <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                    <SectionHeader icon={<Search size={20} className="text-green-400" />} title="🔍 SEO — Cómo te encuentra la gente en Google" subtitle="SEO significa optimización para buscadores. Es lo que hace que cuando alguien busca lo que vos vendés, aparezca TU negocio y no el de la competencia." />
+                    
+                    {/* Google SERP Positioning (Data-Driven SEO) */}
+                    {auditInput?.serpData && auditInput.serpData.length > 0 && (
+                        <div className="mb-6 p-4 bg-slate-800/50 rounded-xl border border-blue-500/20">
+                            <h4 className="text-sm font-bold text-blue-400 flex items-center gap-2 mb-4">
+                                <Search size={16} />
+                                Posicionamiento Real en Google (Top 10)
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {auditInput.serpData.map((serp, i) => (
+                                    <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col justify-between">
                                         <div>
-                                            <h4 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                                                <span className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-black text-sm">{i + 1}</span>
-                                                {safeText(leader.name)}
-                                            </h4>
-                                            <span className="text-sm text-slate-400 uppercase tracking-wider font-bold mt-0.5 block">{safeText(leader.platform)}</span>
-                                        </div>
-                                        {leader.profileUrl && (
-                                            <a href={typeof leader.profileUrl === 'string' && leader.profileUrl.startsWith('http') ? leader.profileUrl : `https://${leader.profileUrl}`} target="_blank" rel="noopener noreferrer"
-                                                className="flex items-center gap-1 text-sm text-emerald-600 font-semibold hover:underline px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-200">
-                                                <ExternalLink size={14} /> Ver perfil
-                                            </a>
-                                        )}
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3 mb-4">
-                                        <div className="p-3 bg-white rounded-xl text-center border border-slate-100">
-                                            <span className="text-xs text-slate-400 block">Seguidores</span>
-                                            <span className="text-xl font-black text-slate-900">{safeText(leader.followers)}</span>
-                                        </div>
-                                        <div className="p-3 bg-white rounded-xl text-center border border-slate-100">
-                                            <span className="text-xs text-slate-400 block">Tasa de Engagement</span>
-                                            <span className="text-xl font-black text-emerald-600">{safeText(leader.engagementRate)}</span>
-                                        </div>
-                                    </div>
-                                    <div className="p-4 bg-white rounded-xl mb-4 border border-slate-100">
-                                        <span className="text-xs font-bold text-slate-400 uppercase block mb-2">Estrategia que aplica</span>
-                                        <p className="text-base text-slate-700 leading-relaxed">{safeText(leader.strategy)}</p>
-                                    </div>
-                                    {leader.topPosts && Array.isArray(leader.topPosts) && leader.topPosts.length > 0 && (
-                                        <div className="mb-4">
-                                            <span className="text-xs font-bold text-slate-400 uppercase block mb-2">Publicaciones más virales</span>
-                                            <div className="space-y-2">
-                                                {leader.topPosts.map((post: any, j: number) => (
-                                                    <div key={j} className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-100 hover:border-emerald-200 transition">
-                                                        <span className="text-lg">🔥</span>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-base text-slate-700">{safeText(post.description)}</p>
-                                                            <div className="flex items-center gap-3 mt-1.5">
-                                                                <span className="text-sm text-emerald-600 font-bold">{safeText(post.engagement)}</span>
-                                                                {typeof post.url === 'string' && post.url && (
-                                                                    <a href={post.url.startsWith('http') ? post.url : `https://${post.url}`} target="_blank" rel="noopener noreferrer"
-                                                                        className="text-sm text-indigo-500 hover:underline flex items-center gap-1">
-                                                                        <ExternalLink size={12} /> Ver publicación
-                                                                    </a>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                            <div className="flex justify-between items-start mb-2">
+                                                <span className="text-xs font-medium text-slate-400">Búsqueda:</span>
+                                                {serp.userPosition ? (
+                                                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
+                                                        Top {serp.userPosition}
+                                                    </span>
+                                                ) : (
+                                                    <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold">
+                                                        No Aparece
+                                                    </span>
+                                                )}
                                             </div>
-                                        </div>
-                                    )}
-                                    <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
-                                        <span className="text-xs font-bold text-emerald-600 uppercase block mb-2">
-                                            💡 Qué podés aprender / aplicar
-                                        </span>
-                                        <p className="text-base text-emerald-900 font-medium leading-relaxed">{safeText(leader.lessonsForUser)}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </CollapsibleSection>
-                )}
-
-                {/* Email & CRM */}
-                <CollapsibleSection title="📧 Email Marketing & CRM" icon={<Mail size={20} className="text-emerald-600" />} badge={<TrafficLight score={result.emailCrmAssessment.leadNurturingScore} />}>
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className={`p-4 rounded-xl ${result.emailCrmAssessment.hasEmailCapture ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'} font-bold text-base`}>
-                                {result.emailCrmAssessment.hasEmailCapture ? <CheckCircle2 size={16} className="inline mr-2" /> : <AlertTriangle size={16} className="inline mr-2" />}
-                                Captura de Email
-                            </div>
-                            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200"><span className="text-xs text-slate-400 block mb-1">Plataforma</span><span className="font-bold text-lg text-slate-900">{safeText(result.emailCrmAssessment.emailPlatformDetected) || 'N/A'}</span></div>
-                        </div>
-                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200"><span className="text-xs font-bold text-slate-400 block mb-2">Madurez CRM</span><p className="text-base text-slate-700">{safeText(result.emailCrmAssessment.crmMaturity)}</p></div>
-                        {result.emailCrmAssessment.recommendations.length > 0 && (
-                            <ul className="space-y-2">
-                                {result.emailCrmAssessment.recommendations.map((r: any, i: number) => (
-                                    <li key={i} className="flex items-start gap-2 text-base text-slate-700">
-                                        <CheckCircle2 size={16} className="text-emerald-500 mt-1 flex-shrink-0" />
-                                        <span>{safeText(r)}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
-                </CollapsibleSection>
-
-                {/* ── VISUAL IDENTITY (NEW) ───────────────────────────────── */}
-                {result.visualIdentityAudit && safeText(result.visualIdentityAudit.overallScore) && (
-                    <CollapsibleSection title="🎨 Identidad Visual Digital" icon={<Sparkles size={20} className="text-emerald-600" />} defaultOpen>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                {[
-                                    { label: 'Nivel General', value: result.visualIdentityAudit.overallScore },
-                                    { label: 'Consistencia de Marca', value: result.visualIdentityAudit.brandConsistency },
-                                    { label: 'Calidad de Fotos', value: result.visualIdentityAudit.photoQuality },
-                                    { label: 'Estética del Feed', value: result.visualIdentityAudit.feedAesthetic },
-                                ].map((item, i) => (
-                                    <div key={i} className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                                        <span className="text-xs text-slate-400 block mb-1">{item.label}</span>
-                                        <span className="text-base font-black text-slate-900">{safeText(item.value) || 'N/A'}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            {Array.isArray(result.visualIdentityAudit.recommendations) && result.visualIdentityAudit.recommendations.length > 0 && (
-                                <div className="p-5 bg-pink-50 rounded-xl border border-pink-200">
-                                    <span className="text-xs font-bold text-pink-600 uppercase block mb-3">🎯 Recomendaciones de Mejora Visual</span>
-                                    <div className="space-y-2">
-                                        {result.visualIdentityAudit.recommendations.map((rec: any, i: number) => (
-                                            <div key={i} className="flex items-start gap-2">
-                                                <span className="text-pink-500 mt-1">▸</span>
-                                                <p className="text-base text-pink-900">{safeText(rec)}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </CollapsibleSection>
-                )}
-
-                {/* ── CUSTOMER PERCEPTION (NEW) ──────────────────────────── */}
-                {result.customerPerception && safeText(result.customerPerception.currentImage) && (
-                    <CollapsibleSection title="👁️ Cómo te Ven tus Clientes" icon={<TrendingUp size={20} className="text-emerald-600" />} defaultOpen>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="p-5 bg-amber-50 rounded-xl border border-amber-200">
-                                    <span className="text-xs font-bold text-amber-600 uppercase block mb-2">😐 Imagen Actual</span>
-                                    <p className="text-base text-amber-900 leading-relaxed">{safeText(result.customerPerception.currentImage)}</p>
-                                </div>
-                                <div className="p-5 bg-emerald-50 rounded-xl border border-emerald-200">
-                                    <span className="text-xs font-bold text-emerald-600 uppercase block mb-2">🌟 Imagen Ideal</span>
-                                    <p className="text-base text-emerald-900 leading-relaxed">{safeText(result.customerPerception.idealImage)}</p>
-                                </div>
-                            </div>
-                            {Array.isArray(result.customerPerception.gaps) && result.customerPerception.gaps.length > 0 && (
-                                <div className="p-5 bg-red-50 rounded-xl border border-red-200">
-                                    <span className="text-xs font-bold text-red-600 uppercase block mb-3">⚠️ Brechas de Percepción</span>
-                                    {result.customerPerception.gaps.map((gap: any, i: number) => (
-                                        <div key={i} className="flex items-start gap-2 mb-2">
-                                            <span className="text-red-500 mt-1">▸</span>
-                                            <p className="text-base text-red-900">{safeText(gap)}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                            {Array.isArray(result.customerPerception.quickWins) && result.customerPerception.quickWins.length > 0 && (
-                                <div className="p-5 bg-blue-50 rounded-xl border border-blue-200">
-                                    <span className="text-xs font-bold text-blue-600 uppercase block mb-3">⚡ Victorias Rápidas</span>
-                                    {result.customerPerception.quickWins.map((win: any, i: number) => (
-                                        <div key={i} className="flex items-start gap-2 mb-2">
-                                            <span className="text-blue-500 mt-1">▸</span>
-                                            <p className="text-base text-blue-900">{safeText(win)}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </CollapsibleSection>
-                )}
-
-                {/* 1. Social Proof */}
-                {result.socialProof && (
-                    <CollapsibleSection title="💬 Prueba Social (Social Proof)" icon={<MessageCircle size={20} className="text-emerald-600" />}>
-                        <div className="space-y-4 text-slate-700 leading-relaxed text-base">
-                            <div className="flex gap-4">
-                                <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-center flex-1">
-                                    <p className="text-sm font-bold text-emerald-600 uppercase mb-1">Confianza Global</p>
-                                    <p className="text-2xl font-black text-slate-900">{safeText(result.socialProof.trustScore)}/100</p>
-                                </div>
-                                <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 text-center flex-1">
-                                    <p className="text-sm font-bold text-blue-600 uppercase mb-1">Sentimiento</p>
-                                    <p className="text-xl font-bold text-slate-900"><TrafficLight score={result.socialProof.overallSentiment} /></p>
-                                </div>
-                            </div>
-                            
-                            {result.socialProof.googleReviewsAnalysis && (
-                                <div className="p-5 bg-white rounded-xl border-2 border-slate-200">
-                                    <h4 className="font-bold text-lg text-slate-900 mb-3">Google Maps Reviews</h4>
-                                    <div className="flex gap-4 mb-4">
-                                        <div className="bg-slate-50 p-3 rounded-lg flex-1"><p className="text-sm text-slate-500">Rating Promedio</p><p className="font-bold text-lg text-slate-900">⭐ {safeText(result.socialProof.googleReviewsAnalysis.averageRating)}</p></div>
-                                        <div className="bg-slate-50 p-3 rounded-lg flex-1"><p className="text-sm text-slate-500">Total Reseñas</p><p className="font-bold text-lg text-slate-900">{safeText(result.socialProof.googleReviewsAnalysis.totalReviews)}</p></div>
-                                    </div>
-                                    <div className="grid md:grid-cols-2 gap-4">
-                                        <div className="p-4 bg-green-50 rounded-xl border border-green-200">
-                                            <p className="text-xs font-bold text-green-700 uppercase mb-2">✅ Destacan</p>
-                                            <ul className="mb-3 space-y-1">{result.socialProof.googleReviewsAnalysis.positiveThemes?.map((t: string, i: number) => <li key={i} className="text-sm text-green-900">• {safeText(t)}</li>)}</ul>
-                                            <p className="text-sm italic text-green-800 bg-white p-2 rounded-lg">"{safeText(result.socialProof.googleReviewsAnalysis.samplePositive)}"</p>
-                                        </div>
-                                        <div className="p-4 bg-red-50 rounded-xl border border-red-200">
-                                            <p className="text-xs font-bold text-red-700 uppercase mb-2">❌ Se quejan de</p>
-                                            <ul className="mb-3 space-y-1">{result.socialProof.googleReviewsAnalysis.negativeThemes?.map((t: string, i: number) => <li key={i} className="text-sm text-red-900">• {safeText(t)}</li>)}</ul>
-                                            <p className="text-sm italic text-red-800 bg-white p-2 rounded-lg">"{safeText(result.socialProof.googleReviewsAnalysis.sampleNegative)}"</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {Array.isArray(result.socialProof.socialMentions) && result.socialProof.socialMentions.length > 0 && (
-                                <div className="p-5 bg-white rounded-xl border-2 border-slate-200">
-                                    <h4 className="font-bold text-lg text-slate-900 mb-3">Menciones Destacadas en Redes</h4>
-                                    <div className="space-y-3">
-                                        {result.socialProof.socialMentions.map((m: any, i: number) => (
-                                            <div key={i} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <span className="font-bold text-sm text-indigo-700">{safeText(m.platform)}</span>
-                                                    <TrafficLight score={m.sentiment} />
-                                                </div>
-                                                <p className="italic text-slate-800 font-medium bg-white p-3 rounded-lg border border-slate-200">"{safeText(m.topComment)}"</p>
-                                                <p className="text-xs text-slate-500 mt-2">Contexto: {safeText(m.context)}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {Array.isArray(result.socialProof.recommendations) && (
-                                <div className="p-5 bg-emerald-50 rounded-xl border border-emerald-200">
-                                    <span className="text-xs font-bold text-emerald-600 uppercase block mb-3">💡 Recomendaciones de Social Proof</span>
-                                    {result.socialProof.recommendations.map((r: string, i: number) => (
-                                        <div key={i} className="flex gap-2 mb-2"><span className="text-emerald-500">▸</span><p className="text-emerald-900">{safeText(r)}</p></div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </CollapsibleSection>
-                )}
-
-                {/* 2. Funnel Analysis */}
-                {result.funnelAnalysis && (
-                    <CollapsibleSection title="🔎 Funnel de Ventas" icon={<Filter size={20} className="text-emerald-600" />}>
-                        <div className="space-y-4 text-slate-700 leading-relaxed text-base">
-                            <div className="p-5 bg-slate-900 text-white rounded-2xl shadow-lg relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500 opacity-10 rounded-full blur-3xl translate-x-10 -translate-y-10"></div>
-                                <h4 className="font-black text-xl mb-4 text-emerald-400">🚨 Fuga Principal Identificada</h4>
-                                <p className="text-lg font-medium">{safeText(result.funnelAnalysis.biggestLeak)}</p>
-                            </div>
-
-                            <div className="space-y-3 relative before:absolute before:inset-0 before:left-[19px] before:w-1 before:bg-slate-200 pl-4 py-2">
-                                {result.funnelAnalysis.stages?.map((stage: any, i: number) => (
-                                    <div key={i} className="relative bg-white p-5 rounded-xl border-2 border-slate-200 ml-6 shadow-sm">
-                                        <div className="absolute -left-[45px] top-5 w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm border-4 border-white z-10">{i+1}</div>
-                                        <div className="flex justify-between items-start mb-2">
-                                            <h4 className="font-bold text-lg text-slate-900 uppercase">{safeText(stage.stage)}</h4>
-                                            <div className="flex gap-1 flex-wrap justify-end max-w-[50%]">{stage.channels?.map((c: string, j: number) => <span key={j} className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded-lg">{safeText(c)}</span>)}</div>
-                                        </div>
-                                        <p className="text-sm text-slate-700 mb-3 bg-slate-50 p-2 rounded-lg"><strong>Estado actual:</strong> {safeText(stage.currentState)}</p>
-                                        <div className="bg-red-50 p-3 rounded-xl border border-red-100 mb-2">
-                                            <p className="text-xs font-bold text-red-600 uppercase mb-1">❌ Bottleneck</p>
-                                            <p className="text-sm text-red-900">{safeText(stage.bottleneck)}</p>
-                                        </div>
-                                        <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                                            <p className="text-xs font-bold text-emerald-600 uppercase mb-1">✅ Fix Propuesto</p>
-                                            <p className="text-sm text-emerald-900 font-medium">{safeText(stage.fix)}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                                <span className="text-xs font-bold text-slate-500 uppercase block mb-2">🛣️ Rutas de Conversión Comunes</span>
-                                {result.funnelAnalysis.conversionPaths?.map((path: string, i: number) => (
-                                    <div key={i} className="flex items-center gap-2 mb-2 text-sm font-medium text-slate-700 bg-white px-3 py-2 rounded-lg shadow-sm border border-slate-100 uppercase tracking-tight">👉 {safeText(path).split('→').map((p, k, arr) => <React.Fragment key={k}><span className={k === arr.length - 1 ? 'text-emerald-600 font-bold' : ''}>{p.trim()}</span>{k < arr.length - 1 && <span className="text-slate-300 mx-1">→</span>}</React.Fragment>)}</div>
-                                ))}
-                            </div>
-                        </div>
-                    </CollapsibleSection>
-                )}
-
-                {/* 3. Content Identity */}
-                {result.contentIdentityAudit && (
-                    <CollapsibleSection title="🎭 Identidad de Contenido" icon={<Palette size={20} className="text-emerald-600" />}>
-                        <div className="space-y-4 text-slate-700 leading-relaxed text-base">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="p-5 bg-white border-2 border-slate-200 rounded-xl text-center shadow-sm">
-                                    <p className="text-sm font-bold text-slate-500 uppercase mb-1">Calidad Visual</p>
-                                    <div className="text-3xl font-black text-indigo-600">{safeText(result.contentIdentityAudit.visualScore)}<span className="text-lg text-slate-400 font-medium">/10</span></div>
-                                </div>
-                                <div className={`p-5 border-2 rounded-xl text-center shadow-sm flex flex-col justify-center ${result.contentIdentityAudit.isTransactionalOnly ? 'bg-red-50 border-red-200 text-red-900' : 'bg-emerald-50 border-emerald-200 text-emerald-900'}`}>
-                                    <p className="text-sm font-bold uppercase mb-1 opacity-80">Perfil</p>
-                                    <p className="font-black leading-tight">{result.contentIdentityAudit.isTransactionalOnly ? 'SÓLO CATÁLOGO / OFERTAS ❌' : 'BALANCE SALUDABLE ✅'}</p>
-                                </div>
-                            </div>
-                            
-                            <div className="p-5 bg-slate-50 border border-slate-200 rounded-xl">
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="font-bold text-slate-700">Voz y Tono:</span>
-                                    <span className="bg-white px-3 py-1 rounded-lg border border-slate-200 font-medium italic text-indigo-700">{safeText(result.contentIdentityAudit.toneOfVoice)}</span>
-                                </div>
-                                <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-200">
-                                    <span className="font-bold text-slate-700">Consistencia Visual:</span>
-                                    <span className="text-sm text-slate-600 text-right w-2/3">{safeText(result.contentIdentityAudit.brandConsistency)}</span>
-                                </div>
-                            </div>
-
-                            {Array.isArray(result.contentIdentityAudit.contentMix) && (
-                                <div className="p-5 bg-white border-2 border-slate-200 rounded-xl">
-                                    <h4 className="font-bold text-sm text-slate-500 uppercase mb-4">Content Mix Actual (Estimado)</h4>
-                                    <div className="space-y-3">
-                                        {result.contentIdentityAudit.contentMix.map((mix: any, i: number) => {
-                                            const colors = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-pink-500', 'bg-slate-500'];
-                                            const color = colors[i % colors.length];
-                                            const numStr = safeText(mix.percentage).replace(/[^0-9]/g, '');
-                                            const width = numStr ? Math.min(100, Math.max(5, parseInt(numStr))) : 20;
-                                            return (
-                                                <div key={i}>
-                                                    <div className="flex justify-between text-sm font-bold mb-1"><span>{safeText(mix.type)}</span><span className="text-slate-500">{safeText(mix.percentage)}</span></div>
-                                                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden"><div className={`h-full ${color} rounded-full`} style={{ width: `${width}%` }}></div></div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    <div className="mt-4 pt-4 border-t border-slate-100 text-center">
-                                        <p className="text-sm font-bold text-slate-500 uppercase">Ratio Valor / Venta</p>
-                                        <p className="text-lg font-black text-indigo-600">{safeText(result.contentIdentityAudit.valueContentRatio)}</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {Array.isArray(result.contentIdentityAudit.recommendations) && (
-                                <div className="p-5 bg-emerald-50 rounded-xl border border-emerald-200">
-                                    <span className="text-xs font-bold text-emerald-600 uppercase block mb-3">💡 Action Items - Identidad</span>
-                                    {result.contentIdentityAudit.recommendations.map((r: string, i: number) => (
-                                        <div key={i} className="flex gap-2 mb-2"><span className="text-emerald-500">▸</span><p className="text-emerald-900">{safeText(r)}</p></div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </CollapsibleSection>
-                )}
-
-                {/* 4. Competitor Comparison */}
-                {result.competitorComparison && (
-                    <CollapsibleSection title="🥊 Comparativa de Competidores" icon={<Users size={20} className="text-emerald-600" />}>
-                        <div className="space-y-6 text-slate-700 leading-relaxed text-base">
-                            {result.competitorComparison.platforms?.map((plat: any, i: number) => (
-                                <div key={i} className="bg-white border-2 border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                                    <div className="bg-slate-50 px-5 py-4 border-b border-slate-200">
-                                        <h4 className="font-black text-lg text-slate-900">{safeText(plat.platform)}</h4>
-                                    </div>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left text-sm">
-                                            <thead>
-                                                <tr className="bg-slate-50 text-slate-500 uppercase text-xs">
-                                                    <th className="px-5 py-3 font-bold">Perfil</th>
-                                                    <th className="px-5 py-3 font-bold">Seguidores</th>
-                                                    <th className="px-5 py-3 font-bold">Engagement</th>
-                                                    <th className="px-5 py-3 font-bold">Frecuencia</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                <tr className="bg-emerald-50/50 hover:bg-emerald-50 transition">
-                                                    <td className="px-5 py-4 font-bold text-emerald-800 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500"></span>TU NEGOCIO</td>
-                                                    <td className="px-5 py-4 font-bold text-slate-900">{safeText(plat.userMetrics?.followers)}</td>
-                                                    <td className="px-5 py-4 font-bold text-slate-900">{safeText(plat.userMetrics?.engagement)}</td>
-                                                    <td className="px-5 py-4 text-slate-600">{safeText(plat.userMetrics?.postFreq)}</td>
-                                                </tr>
-                                                {plat.competitors?.map((comp: any, j: number) => (
-                                                    <tr key={j} className="hover:bg-slate-50 transition">
-                                                        <td className="px-5 py-4 font-bold text-slate-700">{safeText(comp.name)}</td>
-                                                        <td className="px-5 py-4 font-medium text-slate-600">{safeText(comp.followers)}</td>
-                                                        <td className="px-5 py-4 font-medium text-slate-600">{safeText(comp.engagement)}</td>
-                                                        <td className="px-5 py-4 text-slate-600">{safeText(comp.postFreq)}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </CollapsibleSection>
-                )}
-
-                {/* 5. Channel Strategies */}
-                {Array.isArray(result.channelStrategies) && result.channelStrategies.length > 0 && (
-                    <CollapsibleSection title="📈 Estrategias por Canal" icon={<LayoutDashboard size={20} className="text-emerald-600" />}>
-                        <div className="space-y-6">
-                            {result.channelStrategies.map((strat: any, i: number) => (
-                                <div key={i} className="rounded-2xl border-2 border-slate-200 bg-white overflow-hidden shadow-sm">
-                                    <div className="px-6 py-4 bg-indigo-50 border-b border-indigo-100">
-                                        <h4 className="font-black text-indigo-900 text-xl">{safeText(strat.platform)}</h4>
-                                    </div>
-                                    <div className="p-6 space-y-5">
-                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                            <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Estado Actual</span>
-                                            <p className="text-slate-700 italic">{safeText(strat.currentState)}</p>
-                                        </div>
-                                        <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200">
-                                            <span className="text-xs font-bold text-emerald-600 uppercase block mb-2">🎯 Estrategia Recomendada</span>
-                                            <p className="text-emerald-900 font-medium leading-relaxed">{safeText(strat.strategy)}</p>
+                                            <p className="text-sm font-bold text-white mb-3">"{serp.query}"</p>
                                         </div>
                                         
-                                        <div className="grid md:grid-cols-2 gap-4">
-                                            <div className="bg-white border border-slate-200 p-4 rounded-xl">
-                                                <span className="text-xs font-bold text-slate-500 uppercase block mb-2">Tipos de Contenido</span>
-                                                <ul className="space-y-1">
-                                                    {strat.contentTypes?.map((ct: string, j: number) => <li key={j} className="text-sm text-slate-700 flex gap-2"><span className="text-indigo-500">•</span> {safeText(ct)}</li>)}
-                                                </ul>
-                                            </div>
-                                            <div className="bg-white border border-slate-200 p-4 rounded-xl">
-                                                <span className="text-xs font-bold text-slate-500 uppercase block mb-2">Frecuencia & Presupuesto</span>
-                                                <p className="text-sm text-slate-700 mb-2"><strong>Frecuencia:</strong> {safeText(strat.postingSchedule)}</p>
-                                                <p className="text-sm text-slate-700 mb-2"><strong>Presupuesto Sugerido:</strong> <span className="text-emerald-600 font-bold">{safeText(strat.budgetSuggestion)}</span></p>
-                                                <p className="text-sm text-slate-700"><strong>Resultados:</strong> {safeText(strat.expectedResults)}</p>
-                                            </div>
-                                        </div>
-
-                                        {Array.isArray(strat.kpis) && strat.kpis.length > 0 && (
-                                            <div className="bg-slate-900 text-white p-5 rounded-xl">
-                                                <span className="text-xs font-bold text-slate-400 uppercase block mb-3">📊 KPIs a medir (Proyección)</span>
-                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                                    {strat.kpis.map((kpi: any, j: number) => (
-                                                        <div key={j} className="text-center">
-                                                            <p className="text-xs font-bold text-slate-400 mb-1 leading-tight">{safeText(kpi.metric)}</p>
-                                                            <p className="text-slate-500 text-xs line-through mb-0.5">{safeText(kpi.current)}</p>
-                                                            <p className="text-emerald-400 font-black mb-0.5">{safeText(kpi.target30d)} <span className="text-[10px] text-slate-400 font-normal">30d</span></p>
-                                                            <p className="text-emerald-500 font-black">{safeText(kpi.target90d)} <span className="text-[10px] text-slate-400 font-normal">90d</span></p>
+                                        <div className="space-y-2 mt-auto">
+                                            {serp.userPosition && (
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-slate-400">Tu posición:</span>
+                                                    <span className="font-bold text-emerald-400">#{serp.userPosition}</span>
+                                                </div>
+                                            )}
+                                            {serp.userInLocalPack && (
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-slate-400">Google Maps:</span>
+                                                    <span className="font-bold text-blue-400">Sos relevante 📍</span>
+                                                </div>
+                                            )}
+                                            {serp.competitorPositions && serp.competitorPositions.length > 0 && (
+                                                <div className="pt-2 border-t border-white/10 mt-2">
+                                                    <p className="text-[10px] text-slate-500 mb-1">Competidores en el radar:</p>
+                                                    {serp.competitorPositions.map((c, idx) => (
+                                                        <div key={idx} className="flex justify-between items-center text-xs">
+                                                            <span className="text-slate-400 truncate pr-2">{c.name}</span>
+                                                            <span className="font-bold text-amber-400">#{c.position}</span>
                                                         </div>
                                                     ))}
                                                 </div>
+                                            )}
+                                            {(!serp.userPosition && (!serp.competitorPositions || serp.competitorPositions.length === 0)) && (
+                                                <div className="pt-2 border-t border-white/10 mt-2">
+                                                    <p className="text-[10px] text-slate-500 italic">Ni vos ni tu competencia están en la Pág. 1</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/10"><span className="text-[10px] text-slate-500 block mb-1">Blog</span><span className="text-sm font-bold text-white">{result.seoAnalysis?.blogStatus || 'N/A'}</span><p className="text-[10px] text-slate-500">Tener blog ayuda a que Google te recomiende</p></div>
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/10"><span className="text-[10px] text-slate-500 block mb-1">Meta Tags</span><span className="text-sm font-bold text-white">{result.seoAnalysis?.metaTagsStatus || 'N/A'}</span><p className="text-[10px] text-slate-500">Títulos y descripciones que ve Google</p></div>
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/10"><span className="text-[10px] text-slate-500 block mb-1">Keywords</span><span className="text-sm font-bold text-white truncate">{safeText(result.seoAnalysis?.keywordGapAnalysis)?.slice(0, 60) || 'N/A'}</span></div>
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/10"><span className="text-[10px] text-slate-500 block mb-1">Autoridad</span><span className="text-sm font-bold text-white">{safeText(result.seoAnalysis?.contentAuthorityScore) || 'N/A'}</span><p className="text-[10px] text-slate-500">Qué tanta confianza genera tu contenido</p></div>
+                    </div>
+                    {result.seoAnalysis.productNamingIssues && result.seoAnalysis.productNamingIssues.length > 0 && (
+                        <div className="p-4 bg-amber-500/10 rounded-xl border border-amber-500/20 mb-3">
+                            <span className="text-xs font-bold text-amber-400 uppercase block mb-3">🏷️ Nombres de Productos con Problemas de SEO</span>
+                            <p className="text-[11px] text-slate-400 mb-3">Estos nombres no ayudan a que te encuentren en Google. Te sugerimos cambiarlos para que coincidan con lo que la gente busca.</p>
+                            <div className="space-y-2">
+                                {result.seoAnalysis.productNamingIssues.map((issue, i) => (
+                                    <div key={i} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+                                        <span className="text-red-400 font-mono text-xs line-through">{issue.currentName}</span>
+                                        <span className="text-slate-500">→</span>
+                                        <span className="text-emerald-400 font-bold text-xs">{issue.suggestedName}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {result.seoAnalysis?.localSeoCheck && (
+                        <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                            <span className="text-xs font-bold text-blue-400 block mb-1">📍 SEO Local (Google Maps, búsquedas "cerca de mí")</span>
+                            <p className="text-sm text-slate-300">{safeText(result.seoAnalysis.localSeoCheck?.localReviewSummary) || 'N/A'}</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* ══════════════════════════════════════════════════════════
+                    AI READINESS (AEO)
+                ══════════════════════════════════════════════════════════ */}
+                <div className="bg-gradient-to-br from-violet-950/50 to-slate-900 rounded-2xl border border-violet-500/20 p-6 sm:p-8">
+                    <SectionHeader icon={<Bot size={20} className="text-violet-400" />} title="🤖 SEO para IAs (AEO)" subtitle="AEO = Answer Engine Optimization. Es lo nuevo: que tu negocio aparezca cuando la gente le pregunta a ChatGPT, Gemini o Siri. Hoy no es obligatorio, pero en 1-2 años será tan importante como Google." />
+                    {result.aiReadiness?.summary && (
+                        <p className="text-slate-300 text-sm leading-relaxed bg-white/5 rounded-xl p-4 border border-white/10 mb-4">{safeText(result.aiReadiness.summary)}</p>
+                    )}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        {[
+                            { label: 'Datos Estructurados', value: result.aiReadiness?.structuredData?.detected, tip: 'Etiquetas invisibles en tu web que ayudan a las IAs a entender tu negocio', detail: safeText(result.aiReadiness?.structuredData?.recommendation) },
+                            { label: 'Contenido Q&A', value: result.aiReadiness?.qaContent?.hasQaFormat, tip: 'Preguntas y respuestas que las IAs pueden usar directamente', detail: safeText(result.aiReadiness?.qaContent?.recommendation) },
+                            { label: 'llms.txt', value: result.aiReadiness?.llmsTxt?.exists, tip: 'Un archivo especial que le dice a las IAs cómo describir tu negocio', detail: safeText(result.aiReadiness?.llmsTxt?.recommendation) },
+                            { label: 'E-E-A-T', value: null, tip: 'Experiencia, conocimiento, autoridad y confianza que transmite tu web', detail: safeText(result.aiReadiness?.eeatScore) },
+                        ].map((item, i) => (
+                            <div key={i} className="p-3 bg-white/5 rounded-xl border border-white/10">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-lg">{item.value === true ? '🟢' : item.value === false ? '🔴' : '📊'}</span>
+                                    <span className="text-xs font-bold text-slate-300">{item.label}</span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 mb-1">{item.tip}</p>
+                                {item.detail && <p className="text-[10px] text-violet-300">{item.detail}</p>}
+                            </div>
+                        ))}
+                    </div>
+                    {result.aiReadiness?.aiCrawlerAccess?.blocked?.length > 0 && (
+                        <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20">
+                            <span className="text-xs font-bold text-red-400 block mb-1">⚠️ Bots de IA BLOQUEADOS</span>
+                            <p className="text-xs text-slate-300">{result.aiReadiness.aiCrawlerAccess.blocked.join(', ')}</p>
+                            <p className="text-[10px] text-red-300 mt-1">Esto significa que ChatGPT, Gemini y otros NO pueden leer tu web para recomendarte. {result.aiReadiness.aiCrawlerAccess.recommendation}</p>
+                        </div>
+                    )}
+
+                </div>
+
+                {/* ══════════════════════════════════════════════════════════
+                    SOCIAL MEDIA DASHBOARD
+                ══════════════════════════════════════════════════════════ */}
+                {result.socialMediaAudit && result.socialMediaAudit.length > 0 && (
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<TrendingUp size={20} className="text-pink-400" />} title="📱 Redes Sociales" subtitle="El estado de tus perfiles en redes sociales. Engagement = qué tanto tu audiencia interactúa con tu contenido (likes, comentarios, compartidos)." />
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead>
+                                    <tr className="text-slate-500 text-[10px] uppercase tracking-wider border-b border-white/10">
+                                        <th className="px-4 py-3 font-bold">Red</th>
+                                        <th className="px-4 py-3 font-bold">Seguidores</th>
+                                        <th className="px-4 py-3 font-bold">Engagement</th>
+                                        <th className="px-4 py-3 font-bold">Frecuencia Posts</th>
+                                        <th className="px-4 py-3 font-bold">Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {result.socialMediaAudit.map((profile: any, i: number) => (
+                                        <tr key={i} className="hover:bg-white/5 transition">
+                                            <td className="px-4 py-3 font-bold text-white">{safeText(profile.platform)}</td>
+                                            <td className="px-4 py-3 text-slate-300 font-medium">{safeText(profile.followers)}</td>
+                                            <td className="px-4 py-3 text-slate-300">{safeText(profile.engagement)}</td>
+                                            <td className="px-4 py-3 text-slate-400">{safeText(profile.postingFrequency)}</td>
+                                            <td className="px-4 py-3"><TrafficLight score={profile.overallScore} /></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        {result.socialMediaAudit.some((p: any) => p.topPosts?.length > 0) && (
+                            <div className="mt-4 p-4 bg-white/5 rounded-xl border border-white/10">
+                                <span className="text-xs font-bold text-slate-400 uppercase block mb-3">🔥 Posts Más Exitosos</span>
+                                <div className="space-y-2">
+                                    {result.socialMediaAudit.flatMap((p: any) => (p.topPosts || []).slice(0, 3).map((post: any, j: number) => (
+                                        <div key={`${p.platform}-${j}`} className="flex items-start gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 transition">
+                                            <span className="text-sm font-bold text-pink-400 whitespace-nowrap">{safeText(p.platform)}</span>
+                                            <p className="text-xs text-slate-300 flex-1 line-clamp-2">{safeText(post.description || post.content || post.caption)}</p>
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                <span className="text-xs text-emerald-400 font-bold">{safeText(post.engagement || post.likes)}</span>
+                                                {(post.url || post.link) && (
+                                                    <a href={post.url || post.link} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 transition">
+                                                        <ExternalLink size={12} />
+                                                    </a>
+                                                )}
                                             </div>
-                                        )}
+                                        </div>
+                                    )))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════
+                    COMPETITOR BENCHMARKING
+                ══════════════════════════════════════════════════════════ */}
+                {result.competitorBenchmark && result.competitorBenchmark.length > 0 && (
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<Users size={20} className="text-violet-400" />} title="🥊 Tu Negocio vs Competencia" subtitle="Comparamos tu presencia digital con la de tus competidores directos. Esto te muestra dónde estás ganando y dónde podés mejorar." />
+                        {result.competitorBenchmark.map((comp: any, i: number) => (
+                            <div key={i} className="mb-4 p-4 bg-white/5 rounded-xl border border-white/10">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="text-base font-bold text-white flex items-center gap-2">
+                                        <span className="w-6 h-6 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-400 font-black text-xs">{i + 1}</span>
+                                        {safeText(comp.competitorName || comp.name)}
+                                    </h4>
+                                    {(comp.website || comp.profileUrl) && (
+                                        <a href={typeof (comp.website || comp.profileUrl) === 'string' && (comp.website || comp.profileUrl).startsWith('http') ? (comp.website || comp.profileUrl) : `https://${comp.website || comp.profileUrl}`} target="_blank" rel="noopener noreferrer" className="text-xs text-violet-400 hover:underline flex items-center gap-1">
+                                            <ExternalLink size={12} /> Ver perfil
+                                        </a>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 mb-3">
+                                    <div className="p-2 bg-white/5 rounded-lg text-center"><span className="text-[10px] text-slate-500 block">Seguidores IG</span><span className="text-sm font-bold text-white">{safeText(comp.followers || 'N/A')}</span></div>
+                                    <div className="p-2 bg-white/5 rounded-lg text-center"><span className="text-[10px] text-slate-500 block">Engagement</span><span className="text-sm font-bold text-white">{safeText(comp.engagementRate || 'N/A')}</span></div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 mb-3">
+                                    <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20">
+                                        <span className="text-[10px] font-bold text-red-400 uppercase block mb-1">🔥 Qué hacen mejor</span>
+                                        <p className="text-xs text-slate-300">{safeText(comp.whatTheyDoBetter || comp.contentStrategyGap)}</p>
+                                    </div>
+                                    <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                                        <span className="text-[10px] font-bold text-emerald-400 uppercase block mb-1">👑 Qué hacés mejor vos</span>
+                                        <p className="text-xs text-slate-300">{safeText(comp.whatClientDoesBetter)}</p>
+                                    </div>
+                                </div>
+                                <div className="p-3 bg-violet-500/10 rounded-xl border border-violet-500/20 mb-3">
+                                    <span className="text-[10px] font-bold text-violet-400 uppercase block mb-1">💡 Qué podés aprender</span>
+                                    <p className="text-xs text-slate-300">{safeText(comp.keyTakeaway)}</p>
+                                </div>
+                                {comp.professionalInterpretation && (
+                                    <div className="mt-3 p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+                                        <span className="text-[10px] font-bold text-indigo-400 uppercase block mb-1">📋 Interpretación Profesional</span>
+                                        <p className="text-xs text-slate-300 whitespace-pre-line leading-relaxed">{safeText(comp.professionalInterpretation)}</p>
+                                    </div>
+                                )}
+                                {comp.topPosts && comp.topPosts.length > 0 && (
+                                    <div className="mt-4 border-t border-white/10 pt-4">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase block mb-2">📸 Sus posts más exitosos</span>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            {comp.topPosts.slice(0, 3).map((post: any, j: number) => (
+                                                <div key={j} className="p-3 bg-white/5 rounded-xl border border-white/10 flex flex-col h-full">
+                                                    <p className="text-xs text-slate-300 line-clamp-3 mb-3 flex-grow italic">"{safeText(post.caption)}"</p>
+                                                    <div className="flex items-center justify-between text-[10px] text-slate-400 mt-auto pt-2 border-t border-white/5">
+                                                        <div className="flex gap-2">
+                                                            <span className="flex items-center gap-1 text-pink-400"><Heart size={10} /> {safeText(post.likes)}</span>
+                                                            <span className="flex items-center gap-1 text-blue-400"><MessageCircle size={10} /> {safeText(post.comments)}</span>
+                                                        </div>
+                                                        {post.url && (
+                                                            <a href={post.url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1">
+                                                                Ver post <ExternalLink size={10} />
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════
+                    INDUSTRY LEADERS
+                ══════════════════════════════════════════════════════════ */}
+                {result.industryLeaders && result.industryLeaders.length > 0 && (
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<Star size={20} className="text-amber-400" />} title="🏆 Referentes del Rubro" subtitle="Marcas líderes en tu industria que son referencia en marketing digital. Estudiar qué les funciona te da un shortcut para mejorar tu estrategia. No son tu competencia directa, sino inspiración." />
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {result.industryLeaders.map((leader: any, i: number) => (
+                                <div key={i} className="p-4 bg-white/5 rounded-xl border border-white/10">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="text-base font-bold text-white">{safeText(leader.name)}</h4>
+                                        {leader.profileUrl && <a href={typeof leader.profileUrl === 'string' && leader.profileUrl.startsWith('http') ? leader.profileUrl : `https://${leader.profileUrl}`} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-400 hover:underline"><ExternalLink size={12} /></a>}
+                                    </div>
+                                    <div className="flex gap-3 text-xs text-slate-400 mb-2">
+                                        <span>{safeText(leader.platform)}</span>
+                                        <span>👥 {safeText(leader.followers)}</span>
+                                        <span>📊 {safeText(leader.engagementRate)}</span>
+                                    </div>
+                                    <p className="text-xs text-slate-300 mb-2">{safeText(leader.strategy)}</p>
+                                    <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                                        <p className="text-[10px] text-emerald-300">{safeText(leader.lessonsForUser)}</p>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    </CollapsibleSection>
+                    </div>
                 )}
 
-                {/* 6. Ad Strategy */}
+                {/* ══════════════════════════════════════════════════════════
+                    EMAIL & CRM
+                ══════════════════════════════════════════════════════════ */}
+                <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                    <SectionHeader icon={<Mail size={20} className="text-cyan-400" />} title="📧 Email Marketing & CRM" subtitle="CRM = herramienta para gestionar clientes. Email marketing = enviar emails con ofertas, novedades o contenido de valor a tus contactos. Es uno de los canales con mayor retorno de inversión." />
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                        <div className={`p-3 rounded-xl border ${result.emailCrmAssessment.hasEmailCapture ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                            <div className="flex items-center gap-2">{result.emailCrmAssessment.hasEmailCapture ? <CheckCircle2 size={16} className="text-emerald-400" /> : <AlertTriangle size={16} className="text-red-400" />}<span className={`text-sm font-bold ${result.emailCrmAssessment.hasEmailCapture ? 'text-emerald-300' : 'text-red-300'}`}>Captura de Email</span></div>
+                            <p className="text-[10px] text-slate-500 mt-1">{result.emailCrmAssessment.hasEmailCapture ? 'Tu web captura datos de visitantes' : 'No estás capturando emails de tus visitantes — estás perdiendo contactos potenciales'}</p>
+                        </div>
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/10"><span className="text-[10px] text-slate-500 block mb-1">Plataforma</span><span className="text-sm font-bold text-white">{safeText(result.emailCrmAssessment.emailPlatformDetected) || 'N/A'}</span></div>
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/10"><span className="text-[10px] text-slate-500 block mb-1">Madurez CRM</span><span className="text-sm font-bold text-white">{safeText(result.emailCrmAssessment.crmMaturity) || 'N/A'}</span><p className="text-[10px] text-slate-500">Qué tan sofisticado es tu seguimiento de clientes</p></div>
+                    </div>
+                    {result.emailCrmAssessment.recommendations.length > 0 && (
+                        <div className="space-y-1">{result.emailCrmAssessment.recommendations.map((r: any, i: number) => <div key={i} className="flex items-start gap-2 text-sm text-slate-300"><CheckCircle2 size={14} className="text-cyan-400 mt-0.5 flex-shrink-0" /><span>{safeText(r)}</span></div>)}</div>
+                    )}
+                </div>
+
+                {/* ══════════════════════════════════════════════════════════
+                    VISUAL IDENTITY
+                ══════════════════════════════════════════════════════════ */}
+                {result.visualIdentityAudit && safeText(result.visualIdentityAudit.overallScore) && (
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<Sparkles size={20} className="text-pink-400" />} title="🎨 Identidad Visual Digital" subtitle="Cómo se ve tu marca en internet. La coherencia visual genera confianza y profesionalismo." />
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {[
+                                { label: 'Nivel General', value: result.visualIdentityAudit.overallScore },
+                                { label: 'Consistencia', value: result.visualIdentityAudit.brandConsistency },
+                                { label: 'Calidad Fotos', value: result.visualIdentityAudit.photoQuality },
+                                { label: 'Estética Feed', value: result.visualIdentityAudit.feedAesthetic },
+                            ].map((item, i) => (
+                                <div key={i} className="p-3 bg-white/5 rounded-xl border border-white/10 text-center">
+                                    <span className="text-[10px] text-slate-500 block mb-1">{item.label}</span>
+                                    <span className="text-base font-black text-white">{safeText(item.value) || 'N/A'}</span>
+                                </div>
+                            ))}
+                        </div>
+                        {Array.isArray(result.visualIdentityAudit.recommendations) && result.visualIdentityAudit.recommendations.length > 0 && (
+                            <div className="mt-4 p-4 bg-pink-500/10 rounded-xl border border-pink-500/20">
+                                <span className="text-xs font-bold text-pink-400 uppercase block mb-2">🎯 Mejoras Visuales Sugeridas</span>
+                                {result.visualIdentityAudit.recommendations.map((rec: any, i: number) => <div key={i} className="flex gap-2 mb-1"><span className="text-pink-400">▸</span><p className="text-xs text-slate-300">{safeText(rec)}</p></div>)}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════
+                    CUSTOMER PERCEPTION
+                ══════════════════════════════════════════════════════════ */}
+                {result.customerPerception && safeText(result.customerPerception.currentImage) && (
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<TrendingUp size={20} className="text-amber-400" />} title="👁️ Cómo te Ven tus Clientes" subtitle="La percepción que tus clientes tienen de tu marca. Muchas veces lo que vos creés que transmitís no es lo que la gente percibe." />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                            <div className="p-4 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                                <span className="text-xs font-bold text-amber-400 uppercase block mb-2">😐 Imagen Actual</span>
+                                <p className="text-sm text-slate-300">{safeText(result.customerPerception.currentImage)}</p>
+                            </div>
+                            <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                                <span className="text-xs font-bold text-emerald-400 uppercase block mb-2">🌟 Imagen Ideal</span>
+                                <p className="text-sm text-slate-300">{safeText(result.customerPerception.idealImage)}</p>
+                            </div>
+                        </div>
+                        {Array.isArray(result.customerPerception.gaps) && result.customerPerception.gaps.length > 0 && (
+                            <div className="p-4 bg-red-500/10 rounded-xl border border-red-500/20 mb-3">
+                                <span className="text-xs font-bold text-red-400 uppercase block mb-2">⚠️ Brechas de Percepción</span>
+                                {result.customerPerception.gaps.map((gap: any, i: number) => <div key={i} className="flex gap-2 mb-1"><span className="text-red-400">▸</span><p className="text-xs text-slate-300">{safeText(gap)}</p></div>)}
+                            </div>
+                        )}
+                        {Array.isArray(result.customerPerception.quickWins) && result.customerPerception.quickWins.length > 0 && (
+                            <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                                <span className="text-xs font-bold text-blue-400 uppercase block mb-2">⚡ Victorias Rápidas</span>
+                                {result.customerPerception.quickWins.map((win: any, i: number) => <div key={i} className="flex gap-2 mb-1"><span className="text-blue-400">▸</span><p className="text-xs text-slate-300">{safeText(win)}</p></div>)}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════
+                    SOCIAL PROOF
+                ══════════════════════════════════════════════════════════ */}
+                {result.socialProof && (
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<MessageCircle size={20} className="text-blue-400" />} title="💬 Prueba Social" subtitle="Social Proof = lo que otros dicen de vos. Reseñas, comentarios y menciones. Las personas confían más en lo que dicen otros clientes que en lo que dice tu publicidad." />
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-center"><span className="text-xs font-bold text-emerald-400 uppercase block mb-1">Confianza Global</span><span className="text-3xl font-black text-white">{safeText(result.socialProof.trustScore)}<span className="text-sm text-slate-500">/100</span></span></div>
+                            <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20 text-center"><span className="text-xs font-bold text-blue-400 uppercase block mb-1">Sentimiento General</span><div className="mt-1"><TrafficLight score={result.socialProof.overallSentiment} /></div></div>
+                        </div>
+                        {result.socialProof.googleReviewsAnalysis && (
+                            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm mt-6">
+                                <div className="flex items-start gap-4 mb-5">
+                                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <span className="text-2xl">🗺️</span>
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-slate-900 text-lg">Tu Ficha de Google Maps</h4>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-amber-500 font-bold text-lg">{safeText(result.socialProof.googleReviewsAnalysis.averageRating)}</span>
+                                            <div className="flex text-amber-500 text-sm">★★★★★</div>
+                                            <span className="text-slate-500 text-sm">({safeText(result.socialProof.googleReviewsAnalysis.totalReviews)} reseñas verificadas)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="grid sm:grid-cols-2 gap-4">
+                                    <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                                        <h5 className="font-bold text-emerald-800 text-sm mb-3 flex items-center gap-2">
+                                            <span className="text-emerald-500">👍</span> Lo que más elogian
+                                        </h5>
+                                        <ul className="space-y-2">
+                                            {result.socialProof.googleReviewsAnalysis.positiveThemes?.map((t: string, i: number) => (
+                                                <li key={i} className="text-emerald-700 text-sm flex items-start gap-2">
+                                                    <span className="text-emerald-400 mt-0.5">•</span>
+                                                    <span>{safeText(t)}</span>
+                                                </li>
+                                            ))}
+                                            {(!result.socialProof.googleReviewsAnalysis.positiveThemes || result.socialProof.googleReviewsAnalysis.positiveThemes.length === 0) && (
+                                                <li className="text-slate-500 text-sm italic">No hay suficientes datos.</li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                    <div className="bg-red-50 rounded-xl p-4 border border-red-100">
+                                        <h5 className="font-bold text-red-800 text-sm mb-3 flex items-center gap-2">
+                                            <span className="text-red-500">👎</span> Lo que más critican
+                                        </h5>
+                                        <ul className="space-y-2">
+                                            {result.socialProof.googleReviewsAnalysis.negativeThemes?.map((t: string, i: number) => (
+                                                <li key={i} className="text-red-700 text-sm flex items-start gap-2">
+                                                    <span className="text-red-400 mt-0.5">•</span>
+                                                    <span>{safeText(t)}</span>
+                                                </li>
+                                            ))}
+                                            {(!result.socialProof.googleReviewsAnalysis.negativeThemes || result.socialProof.googleReviewsAnalysis.negativeThemes.length === 0) && (
+                                                <li className="text-slate-500 text-sm italic">Sin críticas recurrentes detectadas.</li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {Array.isArray(result.socialProof.recommendations) && (
+                            <div className="space-y-1">{result.socialProof.recommendations.map((r: string, i: number) => <div key={i} className="flex gap-2"><span className="text-blue-400">▸</span><p className="text-xs text-slate-300">{safeText(r)}</p></div>)}</div>
+                        )}
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════
+                    FUNNEL ANALYSIS
+                ══════════════════════════════════════════════════════════ */}
+                {result.funnelAnalysis && (
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<Filter size={20} className="text-indigo-400" />} title="🔎 Funnel de Ventas" subtitle="Funnel = el camino que recorre un potencial cliente desde que te conoce hasta que te compra. Como un embudo: entran muchos arriba y salen pocos abajo comprando. El objetivo es que se pierdan la menor cantidad posible en el camino." />
+                        <div className="p-4 bg-gradient-to-r from-red-500/20 to-amber-500/20 rounded-xl border border-red-500/30 mb-4">
+                            <span className="text-xs font-bold text-red-400 uppercase block mb-1">🚨 Fuga Principal</span>
+                            <p className="text-sm text-white font-medium">{safeText(result.funnelAnalysis.biggestLeak)}</p>
+                            <InfoTip text="Esto es donde más clientes potenciales estás perdiendo. Solucionarlo debería ser prioridad." />
+                        </div>
+                        <div className="space-y-3">
+                            {result.funnelAnalysis.stages?.map((stage: any, i: number) => (
+                                <div key={i} className="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/10">
+                                    <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-black text-sm flex-shrink-0">{i + 1}</div>
+                                    <div className="flex-1 min-w-0">
+                                        <span className="text-sm font-bold text-white uppercase block">{safeText(stage.stage)}</span>
+                                        <p className="text-xs text-slate-400 mt-1">{safeText(stage.currentState)}</p>
+                                        <div className="grid grid-cols-2 gap-2 mt-2">
+                                            <div className="p-2 bg-red-500/10 rounded-lg"><span className="text-[10px] font-bold text-red-400">❌ Problema:</span><p className="text-[10px] text-slate-300">{safeText(stage.bottleneck)}</p></div>
+                                            <div className="p-2 bg-emerald-500/10 rounded-lg"><span className="text-[10px] font-bold text-emerald-400">✅ Fix:</span><p className="text-[10px] text-slate-300">{safeText(stage.fix)}</p></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════
+                    CONTENT IDENTITY
+                ══════════════════════════════════════════════════════════ */}
+                {result.contentIdentityAudit && (
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<Palette size={20} className="text-indigo-400" />} title="🎭 Identidad de Contenido" subtitle="Qué tipo de contenido publicás, el tono que usás y si tu marca se ve consistente en todos los canales." />
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="p-3 bg-white/5 rounded-xl border border-white/10 text-center"><span className="text-[10px] text-slate-500 block mb-1">Calidad Visual</span><span className="text-2xl font-black text-indigo-400">{safeText(result.contentIdentityAudit.visualScore)}<span className="text-sm text-slate-500">/10</span></span></div>
+                            <div className={`p-3 rounded-xl border text-center ${result.contentIdentityAudit.isTransactionalOnly ? 'bg-red-500/10 border-red-500/30' : 'bg-emerald-500/10 border-emerald-500/30'}`}>
+                                <span className="text-[10px] text-slate-500 block mb-1">Perfil</span>
+                                <span className={`text-sm font-bold ${result.contentIdentityAudit.isTransactionalOnly ? 'text-red-400' : 'text-emerald-400'}`}>{result.contentIdentityAudit.isTransactionalOnly ? 'SOLO VENDE ❌' : 'BALANCE OK ✅'}</span>
+                                <p className="text-[10px] text-slate-500 mt-1">{result.contentIdentityAudit.isTransactionalOnly ? 'Solo publicás ofertas. Necesitás contenido de valor para generar confianza.' : 'Tenés un buen balance entre contenido de valor y ventas.'}</p>
+                            </div>
+                        </div>
+                        {Array.isArray(result.contentIdentityAudit.contentMix) && (
+                            <div className="p-3 bg-white/5 rounded-xl border border-white/10 mb-3">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase block mb-3">Content Mix</span>
+                                {result.contentIdentityAudit.contentMix.map((mix: any, i: number) => {
+                                    const colors = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-pink-500', 'bg-slate-500'];
+                                    const numStr = safeText(mix.percentage).replace(/[^0-9]/g, '');
+                                    const width = numStr ? Math.min(100, Math.max(5, parseInt(numStr))) : 20;
+                                    return (
+                                        <div key={i} className="mb-2">
+                                            <div className="flex justify-between text-xs mb-1"><span className="text-slate-300">{safeText(mix.type)}</span><span className="text-slate-500">{safeText(mix.percentage)}</span></div>
+                                            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full ${colors[i % colors.length]} rounded-full`} style={{ width: `${width}%` }} /></div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════
+                    COMPETITOR COMPARISON TABLE
+                ══════════════════════════════════════════════════════════ */}
+                {result.competitorComparison && (
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<Users size={20} className="text-emerald-400" />} title="📊 Comparativa por Plataforma" subtitle="Tu performance vs competidores en cada red social. Los números en verde significan que estás por encima del promedio." />
+                        {result.competitorComparison.platforms?.map((plat: any, i: number) => (
+                            <div key={i} className="mb-4 overflow-x-auto">
+                                <h4 className="text-sm font-bold text-white mb-2">{safeText(plat.platform)}</h4>
+                                <table className="w-full text-left text-xs">
+                                    <thead><tr className="text-slate-500 text-[10px] uppercase border-b border-white/10"><th className="px-3 py-2">Perfil</th><th className="px-3 py-2">Seguidores</th><th className="px-3 py-2">Engagement</th><th className="px-3 py-2">Frecuencia</th></tr></thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        <tr className="bg-emerald-500/10"><td className="px-3 py-2 font-bold text-emerald-400">TU NEGOCIO</td><td className="px-3 py-2 text-white font-bold">{safeText(plat.userMetrics?.followers)}</td><td className="px-3 py-2 text-white font-bold">{safeText(plat.userMetrics?.engagement)}</td><td className="px-3 py-2 text-slate-300">{safeText(plat.userMetrics?.postFreq)}</td></tr>
+                                        {plat.competitors?.map((comp: any, j: number) => (
+                                            <tr key={j} className="hover:bg-white/5"><td className="px-3 py-2 text-slate-300 font-medium">{safeText(comp.name)}</td><td className="px-3 py-2 text-slate-400">{safeText(comp.followers)}</td><td className="px-3 py-2 text-slate-400">{safeText(comp.engagement)}</td><td className="px-3 py-2 text-slate-500">{safeText(comp.postFreq)}</td></tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════
+                    CHANNEL STRATEGIES
+                ══════════════════════════════════════════════════════════ */}
+                {Array.isArray(result.channelStrategies) && result.channelStrategies.length > 0 && (
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<LayoutDashboard size={20} className="text-indigo-400" />} title="📈 Estrategias por Canal" subtitle="Recomendaciones específicas para cada plataforma donde tenés presencia digital." />
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {result.channelStrategies.map((strat: any, i: number) => (
+                                <div key={i} className="p-4 bg-white/5 rounded-xl border border-white/10">
+                                    <h4 className="font-bold text-base text-white mb-3">{safeText(strat.platform)}</h4>
+                                    <div className="p-2 bg-white/5 rounded-lg mb-2"><span className="text-[10px] text-slate-500 block">Estado Actual</span><p className="text-xs text-slate-300 italic">{safeText(strat.currentState)}</p></div>
+                                    <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20 mb-2"><span className="text-[10px] font-bold text-emerald-400 block">🎯 Estrategia</span><p className="text-xs text-emerald-200">{safeText(strat.strategy)}</p></div>
+                                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                        <div><span className="text-slate-500 block">Frecuencia</span><span className="text-white font-bold">{safeText(strat.postingSchedule)}</span></div>
+                                        <div><span className="text-slate-500 block">Presupuesto</span><span className="text-emerald-400 font-bold">{safeText(strat.budgetSuggestion)}</span></div>
+                                    </div>
+                                    {Array.isArray(strat.kpis) && strat.kpis.length > 0 && (
+                                        <div className="mt-2 p-2 bg-slate-950 rounded-lg">
+                                            <span className="text-[10px] font-bold text-slate-500 block mb-1">📊 KPIs</span>
+                                            <div className="grid grid-cols-2 gap-1">{strat.kpis.map((kpi: any, j: number) => <div key={j} className="text-center p-1"><span className="text-[9px] text-slate-500 block">{safeText(kpi.metric)}</span><span className="text-emerald-400 font-bold text-xs">{safeText(kpi.target30d)}</span></div>)}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════
+                    AD STRATEGY
+                ══════════════════════════════════════════════════════════ */}
                 {result.adStrategy && (
-                    <CollapsibleSection title="🎯 Estrategia Publicitaria (Ads)" icon={<Megaphone size={20} className="text-emerald-600" />}>
-                        <div className="space-y-4 text-slate-700 leading-relaxed text-base">
-                            <div className="grid md:grid-cols-2 gap-4">
-                                <div className="bg-slate-50 border border-slate-200 p-5 rounded-xl">
-                                    <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Inversión Actual / Competencia</span>
-                                    <p className="text-sm text-slate-700 mb-2"><strong>Actual:</strong> {safeText(result.adStrategy.currentAdSpend)}</p>
-                                    <p className="text-sm text-slate-700"><strong>Competencia:</strong> {safeText(result.adStrategy.competitorAdActivity)}</p>
-                                </div>
-                                <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-xl">
-                                    <span className="text-xs font-bold text-emerald-600 uppercase block mb-1">Recomendación General</span>
-                                    <p className="text-sm text-emerald-900 mb-2"><strong>Presupuesto:</strong> {safeText(result.adStrategy.recommendedBudget)}</p>
-                                    <p className="text-sm text-emerald-900"><strong>Plataformas:</strong> {(result.adStrategy.recommendedPlatforms || []).map(safeText).join(', ')}</p>
-                                </div>
-                            </div>
-                            
-                            {Array.isArray(result.adStrategy.adTypes) && result.adStrategy.adTypes.length > 0 && (
-                                <div className="bg-white border-2 border-slate-200 rounded-xl overflow-hidden mt-4">
-                                    <div className="bg-slate-50 px-5 py-3 border-b border-slate-200">
-                                        <h4 className="font-bold text-slate-900">Estructura de Campañas (Playbook)</h4>
-                                    </div>
-                                    <div className="divide-y divide-slate-100">
-                                        {result.adStrategy.adTypes.map((ad: any, i: number) => (
-                                            <div key={i} className="p-4 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center hover:bg-slate-50">
-                                                <div className="flex-1">
-                                                    <p className="font-bold text-indigo-700">{safeText(ad.type)}</p>
-                                                    <p className="text-sm text-slate-600">{safeText(ad.why)}</p>
-                                                </div>
-                                                <div className="whitespace-nowrap px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-700 shadow-sm">
-                                                    Presupuesto: {safeText(ad.budget)}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<Megaphone size={20} className="text-orange-400" />} title="🎯 Estrategia Publicitaria (Ads)" subtitle="Ads = publicidad paga en redes sociales o Google. Cuánto invertir, dónde y qué tipo de anuncios hacer para maximizar el retorno." />
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="p-3 bg-white/5 rounded-xl border border-white/10"><span className="text-[10px] text-slate-500 block mb-1">Inversión Actual</span><span className="text-sm font-bold text-white">{safeText(result.adStrategy.currentAdSpend)}</span></div>
+                            <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20"><span className="text-[10px] text-emerald-400 block mb-1">Presupuesto Recomendado</span><span className="text-sm font-bold text-emerald-300">{safeText(result.adStrategy.recommendedBudget)}</span></div>
                         </div>
-                    </CollapsibleSection>
+                        {Array.isArray(result.adStrategy.adTypes) && result.adStrategy.adTypes.length > 0 && (
+                            <div className="space-y-2">{result.adStrategy.adTypes.map((ad: any, i: number) => (
+                                <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
+                                    <div><span className="text-sm font-bold text-white">{safeText(ad.type)}</span><p className="text-xs text-slate-400">{safeText(ad.why)}</p></div>
+                                    <span className="text-xs font-bold text-amber-400 whitespace-nowrap ml-3">{safeText(ad.budget)}</span>
+                                </div>
+                            ))}</div>
+                        )}
+                    </div>
                 )}
 
-                {/* 7. Influencer Strategy */}
+                {/* ══════════════════════════════════════════════════════════
+                    INFLUENCER STRATEGY
+                ══════════════════════════════════════════════════════════ */}
                 {result.influencerStrategy && (
-                    <CollapsibleSection title="🤝 Marketing con Creadores (Influencers)" icon={<UsersRound size={20} className="text-emerald-600" />}>
-                        <div className="space-y-4 text-slate-700 leading-relaxed text-base">
-                            <div className="flex flex-col md:flex-row gap-4 mb-4">
-                                <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-xl flex-1 text-center">
-                                    <span className="text-xs font-bold text-indigo-600 uppercase block mb-1">Tier Recomendado</span>
-                                    <p className="font-bold text-lg text-indigo-900">{safeText(result.influencerStrategy.recommendedTier)}</p>
-                                </div>
-                                <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex-1 text-center">
-                                    <span className="text-xs font-bold text-emerald-600 uppercase block mb-1">Costo Estimado</span>
-                                    <p className="font-bold text-lg text-emerald-900">{safeText(result.influencerStrategy.estimatedCost)}</p>
-                                </div>
-                            </div>
-
-                            {Array.isArray(result.influencerStrategy.suggestedProfiles) && result.influencerStrategy.suggestedProfiles.length > 0 && (
-                                <div className="bg-white border-2 border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                                    <div className="bg-slate-50 px-5 py-3 border-b border-slate-200">
-                                        <h4 className="font-bold text-slate-900">Perfiles Estructurales Ideales (Ejemplos)</h4>
-                                    </div>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left text-sm">
-                                            <thead>
-                                                <tr className="bg-white text-slate-500 uppercase text-xs border-b border-slate-100">
-                                                    <th className="px-4 py-3 font-bold">Tipo/Nombre</th>
-                                                    <th className="px-4 py-3 font-bold">Plataforma/Fol.</th>
-                                                    <th className="px-4 py-3 font-bold">Nicho</th>
-                                                    <th className="px-4 py-3 font-bold">Por qué sumaría</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {result.influencerStrategy.suggestedProfiles.map((prof: any, j: number) => (
-                                                    <tr key={j} className="hover:bg-slate-50">
-                                                        <td className="px-4 py-3 font-bold text-slate-900">{safeText(prof.name)}</td>
-                                                        <td className="px-4 py-3">
-                                                            <div className="flex flex-col"><span className="font-medium">{safeText(prof.platform)}</span><span className="text-xs text-slate-500">{safeText(prof.followers)}</span></div>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-slate-600">{safeText(prof.niche)}</td>
-                                                        <td className="px-4 py-3 text-slate-600">{safeText(prof.whyRelevant)}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
-
-                            {Array.isArray(result.influencerStrategy.collaborationIdeas) && result.influencerStrategy.collaborationIdeas.length > 0 && (
-                                <div className="p-5 bg-violet-50 rounded-xl border border-violet-200">
-                                    <span className="text-xs font-bold text-violet-600 uppercase block mb-3">🎬 Ideas Clave de Colaboración</span>
-                                    <ul className="space-y-2">
-                                        {result.influencerStrategy.collaborationIdeas.map((idea: string, i: number) => (
-                                            <li key={i} className="flex gap-2"><span className="text-violet-500">▸</span><p className="text-violet-900">{safeText(idea)}</p></li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<UsersRound size={20} className="text-pink-400" />} title="🤝 Marketing con Creadores" subtitle="Trabajar con influencers o creadores de contenido de tu rubro para que recomienden tu producto. Puede ser desde un canje hasta una campaña paga." />
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-center"><span className="text-[10px] text-indigo-400 block mb-1">Tier Recomendado</span><span className="text-sm font-bold text-white">{safeText(result.influencerStrategy.recommendedTier)}</span><p className="text-[10px] text-slate-500 mt-1">Nano = {'<'}10K seg. Micro = 10-50K. Macro = 50K+</p></div>
+                            <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-center"><span className="text-[10px] text-emerald-400 block mb-1">Costo Estimado</span><span className="text-sm font-bold text-emerald-300">{safeText(result.influencerStrategy.estimatedCost)}</span></div>
                         </div>
-                    </CollapsibleSection>
+                        {Array.isArray(result.influencerStrategy.suggestedProfiles) && result.influencerStrategy.suggestedProfiles.length > 0 && (
+                            <div className="space-y-2 mb-3">{result.influencerStrategy.suggestedProfiles.map((prof: any, j: number) => (
+                                <div key={j} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg border border-white/10">
+                                    <span className="text-sm font-bold text-white">{safeText(prof.name)}</span>
+                                    <span className="text-xs text-slate-400">{safeText(prof.platform)} • {safeText(prof.followers)}</span>
+                                    <span className="text-xs text-pink-400 ml-auto">{safeText(prof.whyRelevant)}</span>
+                                </div>
+                            ))}</div>
+                        )}
+                        {Array.isArray(result.influencerStrategy.collaborationIdeas) && result.influencerStrategy.collaborationIdeas.length > 0 && (
+                            <div className="p-3 bg-violet-500/10 rounded-xl border border-violet-500/20"><span className="text-xs font-bold text-violet-400 block mb-2">🎬 Ideas de Colaboración</span>{result.influencerStrategy.collaborationIdeas.map((idea: string, i: number) => <div key={i} className="flex gap-2 mb-1"><span className="text-violet-400">▸</span><p className="text-xs text-slate-300">{safeText(idea)}</p></div>)}</div>
+                        )}
+                    </div>
                 )}
 
-                {/* 8. Marketplace Analysis */}
+                {/* ══════════════════════════════════════════════════════════
+                    MARKETPLACE  
+                ══════════════════════════════════════════════════════════ */}
                 {result.marketplaceAnalysis && (
-                    <CollapsibleSection title="🛒 Análisis de Marketplace (MercadoLibre)" icon={<ShoppingCart size={20} className="text-emerald-600" />}>
-                        <div className="space-y-4 text-slate-700 leading-relaxed text-base">
-                            <div className="bg-yellow-50 border border-yellow-200 p-5 rounded-xl">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="font-black text-yellow-800 text-lg">{safeText(result.marketplaceAnalysis.platform)}</span>
-                                </div>
-                                <p className="text-yellow-900 font-medium">{safeText(result.marketplaceAnalysis.currentPresence)}</p>
-                            </div>
-
-                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Pricing Competitivo</span>
-                                <p className="text-slate-700">{safeText(result.marketplaceAnalysis.competitorPricing)}</p>
-                            </div>
-
-                            {Array.isArray(result.marketplaceAnalysis.topProducts) && result.marketplaceAnalysis.topProducts.length > 0 && (
-                                <div className="bg-white border-2 border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                                    <div className="bg-slate-50 px-5 py-3 border-b border-slate-200">
-                                        <h4 className="font-bold text-slate-900">Productos/Ofertas Destacados</h4>
-                                    </div>
-                                    <ul className="divide-y divide-slate-100">
-                                        {result.marketplaceAnalysis.topProducts.map((prod: any, i: number) => (
-                                            <li key={i} className="p-4 flex justify-between items-center hover:bg-slate-50">
-                                                <span className="font-medium text-slate-800">{safeText(prod.title)}</span>
-                                                <div className="text-right ml-4 flex-shrink-0">
-                                                    <p className="font-black text-emerald-600">{safeText(prod.price)}</p>
-                                                    <p className="text-xs text-slate-500">Vendidos: {safeText(prod.soldQty)}</p>
-                                                </div>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-
-                            {Array.isArray(result.marketplaceAnalysis.recommendations) && result.marketplaceAnalysis.recommendations.length > 0 && (
-                                <div className="p-5 bg-emerald-50 rounded-xl border border-emerald-200 mt-4">
-                                    <span className="text-xs font-bold text-emerald-600 uppercase block mb-3">💡 Optimización de Marketplace</span>
-                                    {result.marketplaceAnalysis.recommendations.map((r: string, i: number) => (
-                                        <div key={i} className="flex gap-2 mb-2"><span className="text-emerald-500">▸</span><p className="text-emerald-900">{safeText(r)}</p></div>
-                                    ))}
-                                </div>
-                            )}
+                    <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                        <SectionHeader icon={<ShoppingCart size={20} className="text-yellow-400" />} title="🛒 Presencia en Marketplace" subtitle="Si vendés productos, estar en MercadoLibre u otros marketplaces puede significar ventas adicionales con poco esfuerzo." />
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="p-3 bg-yellow-500/10 rounded-xl border border-yellow-500/20"><span className="text-[10px] text-yellow-400 block mb-1">Plataforma</span><span className="text-sm font-bold text-white">{safeText(result.marketplaceAnalysis.platform)}</span></div>
+                            <div className="p-3 bg-white/5 rounded-xl border border-white/10"><span className="text-[10px] text-slate-500 block mb-1">Presencia Actual</span><span className="text-sm font-medium text-slate-300">{safeText(result.marketplaceAnalysis.currentPresence)}</span></div>
                         </div>
-                    </CollapsibleSection>
+                        {Array.isArray(result.marketplaceAnalysis.recommendations) && result.marketplaceAnalysis.recommendations.length > 0 && (
+                            <div className="space-y-1">{result.marketplaceAnalysis.recommendations.map((r: string, i: number) => <div key={i} className="flex gap-2"><span className="text-yellow-400">▸</span><p className="text-xs text-slate-300">{safeText(r)}</p></div>)}</div>
+                        )}
+                    </div>
                 )}
 
-                {/* Opportunities */}
-                <CollapsibleSection title="🚀 Plan de Acción Priorizado" icon={<Zap size={20} className="text-emerald-600" />} defaultOpen>
-                    <div className="space-y-3">
+                {/* ══════════════════════════════════════════════════════════
+                    OPPORTUNITIES (Plan de Acción)
+                ══════════════════════════════════════════════════════════ */}
+                <div className="bg-gradient-to-br from-emerald-950/50 to-slate-900 rounded-2xl border border-emerald-500/20 p-6 sm:p-8">
+                    <SectionHeader icon={<Zap size={20} className="text-emerald-400" />} title="🚀 Plan de Acción Priorizado" subtitle="Las acciones concretas que recomendamos, ordenadas por impacto y facilidad de implementación." />
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {result.opportunities.map((opp: any, i: number) => {
-                            const catColors: Record<string, string> = {
-                                'Victoria Rápida': 'bg-green-100 text-green-700 border-green-200',
-                                'Quick Win': 'bg-green-100 text-green-700 border-green-200',
-                                'Inversión Estratégica': 'bg-blue-100 text-blue-700 border-blue-200',
-                                'Strategic Investment': 'bg-blue-100 text-blue-700 border-blue-200',
-                                'Corrección Urgente': 'bg-red-100 text-red-700 border-red-200',
-                                'Critical Fix': 'bg-red-100 text-red-700 border-red-200',
+                            const catStyles: Record<string, string> = {
+                                'Victoria Rápida': 'border-emerald-500/40 bg-emerald-500/10', 'Quick Win': 'border-emerald-500/40 bg-emerald-500/10',
+                                'Inversión Estratégica': 'border-blue-500/40 bg-blue-500/10', 'Strategic Investment': 'border-blue-500/40 bg-blue-500/10',
+                                'Corrección Urgente': 'border-red-500/40 bg-red-500/10', 'Critical Fix': 'border-red-500/40 bg-red-500/10',
                             };
                             return (
-                                <div key={i} className="p-5 bg-white rounded-xl border-2 border-slate-200 hover:shadow-md transition">
-                                    <div className="flex items-center gap-3 mb-3 flex-wrap">
-                                        <h4 className="font-bold text-lg text-slate-900">{safeText(opp.title)}</h4>
-                                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${catColors[safeText(opp.category)] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{safeText(opp.category)}</span>
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${opp.impact === 'high' ? 'bg-emerald-100 text-emerald-700' : opp.impact === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
-                                            Impacto: {safeText(opp.impact)}
-                                        </span>
+                                <div key={i} className={`rounded-xl border p-4 ${catStyles[safeText(opp.category)] || 'border-white/10 bg-white/5'}`}>
+                                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                                        <h4 className="text-sm font-bold text-white">{safeText(opp.title)}</h4>
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-300">{safeText(opp.category)}</span>
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${opp.impact === 'high' ? 'bg-emerald-500/20 text-emerald-400' : opp.impact === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-500/20 text-slate-400'}`}>Impacto: {safeText(opp.impact)}</span>
                                     </div>
-                                    <p className="text-base text-slate-700 mb-3 leading-relaxed">{safeText(opp.description)}</p>
-                                    <div className="grid grid-cols-2 gap-3 text-sm">
-                                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-100"><span className="text-xs text-slate-400 block mb-1">Esfuerzo</span><p className="font-bold text-slate-700">{safeText(opp.effort)}</p></div>
-                                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-100"><span className="text-xs text-slate-400 block mb-1">ROI Estimado</span><p className="font-bold text-emerald-600">{safeText(opp.estimatedRoi)}</p></div>
+                                    <p className="text-xs text-slate-300 mb-2">{safeText(opp.description)}</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="p-2 bg-white/5 rounded-lg"><span className="text-[10px] text-slate-500 block">Esfuerzo</span><span className="text-xs font-bold text-white">{safeText(opp.effort)}</span></div>
+                                        <div className="p-2 bg-white/5 rounded-lg"><span className="text-[10px] text-slate-500 block">ROI Est.</span><span className="text-xs font-bold text-emerald-400">{safeText(opp.estimatedRoi)}</span></div>
                                     </div>
                                 </div>
                             );
                         })}
                     </div>
-                </CollapsibleSection>
+                </div>
 
-                {/* Risks */}
-                <CollapsibleSection title="⚠️ Riesgos y Desafíos" icon={<Shield size={20} className="text-emerald-600" />}>
+                {/* ══════════════════════════════════════════════════════════
+                    RISKS
+                ══════════════════════════════════════════════════════════ */}
+                <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-white/10 p-6 sm:p-8">
+                    <SectionHeader icon={<Shield size={20} className="text-amber-400" />} title="⚠️ Riesgos y Desafíos" subtitle="Cosas a tener en cuenta. No te asustes — todos los negocios tienen riesgos. Lo importante es conocerlos y mitigarlos." />
                     <div className="space-y-3">
                         {result.risks.map((risk: any, i: number) => (
-                            <div key={i} className="p-5 bg-white rounded-xl border-2 border-slate-200">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <span className={`px-2.5 py-1 rounded text-xs font-bold ${risk.severity === 'high' ? 'bg-red-100 text-red-700' : risk.severity === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>{safeText(risk.severity)}</span>
-                                    <h4 className="font-bold text-lg text-slate-900">{safeText(risk.risk)}</h4>
+                            <div key={i} className="p-4 bg-white/5 rounded-xl border border-white/10">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${risk.severity === 'high' ? 'bg-red-500/20 text-red-400' : risk.severity === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>{safeText(risk.severity)}</span>
+                                    <h4 className="text-sm font-bold text-white">{safeText(risk.risk)}</h4>
                                 </div>
-                                <p className="text-base text-slate-700 mb-3 leading-relaxed">{safeText(risk.detail)}</p>
-                                <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
-                                    <span className="text-xs font-bold text-emerald-600 block mb-2">🛡️ Mitigación</span>
-                                    <p className="text-base text-emerald-900">{safeText(risk.mitigation)}</p>
+                                <p className="text-xs text-slate-300 mb-2">{safeText(risk.detail)}</p>
+                                <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                                    <span className="text-[10px] font-bold text-emerald-400 block mb-1">🛡️ Mitigación</span>
+                                    <p className="text-xs text-emerald-200">{safeText(risk.mitigation)}</p>
                                 </div>
                             </div>
                         ))}
                     </div>
-                </CollapsibleSection>
+                </div>
 
-                {/* Roadmap */}
-                <CollapsibleSection title="📅 Roadmap 30/60/90 Días" icon={<Clock size={20} className="text-emerald-600" />} defaultOpen>
+                {/* ══════════════════════════════════════════════════════════
+                    ROADMAP 30/60/90
+                ══════════════════════════════════════════════════════════ */}
+                <div className="bg-gradient-to-br from-indigo-950/50 to-slate-900 rounded-2xl border border-indigo-500/20 p-6 sm:p-8">
+                    <SectionHeader icon={<Clock size={20} className="text-indigo-400" />} title="📅 Roadmap 30/60/90 Días" subtitle="Tu plan paso a paso. Los primeros 30 días enfocate en lo urgente. Los 60 en construir. Los 90 en escalar." />
                     <div className="space-y-4">
                         {(Array.isArray(result.roadmap) ? result.roadmap : (() => {
                             const rm = result.roadmap as any;
@@ -1461,29 +1449,89 @@ export default function DigitalAuditView() {
                                 rm.days90 && { phase: '90 días', focus: rm.days90.focus || '', actions: Array.isArray(rm.days90.actions) ? rm.days90.actions : Array.isArray(rm.days90) ? rm.days90 : [], kpis: Array.isArray(rm.days90.kpis) ? rm.days90.kpis : [] },
                             ].filter(Boolean);
                         })()).map((phase: any, i: number) => {
-                            const phaseColors = ['from-emerald-500 to-teal-500', 'from-blue-500 to-indigo-500', 'from-violet-500 to-purple-500'];
-                            const phaseLabels = ['30 días', '60 días', '90 días'];
+                            const colors = ['from-emerald-500 to-teal-500', 'from-blue-500 to-indigo-500', 'from-violet-500 to-purple-500'];
+                            const labels = ['30 días', '60 días', '90 días'];
                             return (
-                                <div key={i} className="p-6 bg-white rounded-2xl border-2 border-slate-200 hover:shadow-md transition">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className={`px-4 py-2 rounded-xl bg-gradient-to-r ${phaseColors[i] || phaseColors[0]} text-white text-base font-bold shadow-sm`}>{phaseLabels[i] || safeText(phase.phase)}</div>
-                                        <h4 className="font-bold text-lg text-slate-900">{safeText(phase.focus)}</h4>
+                                <div key={i} className="p-5 bg-white/5 rounded-xl border border-white/10">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className={`px-3 py-1.5 rounded-lg bg-gradient-to-r ${colors[i] || colors[0]} text-white text-sm font-bold shadow-sm`}>{labels[i] || safeText(phase.phase)}</div>
+                                        <h4 className="text-sm font-bold text-white">{safeText(phase.focus)}</h4>
                                     </div>
-                                    <ul className="space-y-2 mb-4">
-                                        {(phase.actions || []).map((action: any, j: number) => <li key={j} className="flex items-start gap-2 text-base text-slate-700"><CheckCircle2 size={16} className="text-emerald-500 mt-1 flex-shrink-0" />{safeText(action)}</li>)}
-                                    </ul>
-                                    {(phase.kpis || []).length > 0 && (
-                                        <div className="flex flex-wrap gap-2">
-                                            {(phase.kpis || []).map((kpi: any, k: number) => <span key={k} className="px-3 py-1.5 bg-slate-50 rounded-lg text-sm font-bold text-slate-600 border border-slate-200">📊 {safeText(kpi)}</span>)}
-                                        </div>
-                                    )}
+                                    <ul className="space-y-1 mb-3">{(phase.actions || []).map((action: any, j: number) => <li key={j} className="flex items-start gap-2 text-xs text-slate-300"><CheckCircle2 size={12} className="text-emerald-400 mt-0.5 flex-shrink-0" />{safeText(action)}</li>)}</ul>
+                                    {(phase.kpis || []).length > 0 && <div className="flex flex-wrap gap-1">{(phase.kpis || []).map((kpi: any, k: number) => <span key={k} className="px-2 py-1 bg-white/5 rounded-lg text-[10px] font-bold text-slate-400 border border-white/10">📊 {safeText(kpi)}</span>)}</div>}
                                 </div>
                             );
                         })}
                     </div>
-                </CollapsibleSection>
+                </div>
 
-                {/* Feedback */}
+                {/* ══════════════════════════════════════════════════════════
+                    HIGHLIGHTS SUMMARY (RESUMEN EJECUTIVO RÁPIDO)
+                ══════════════════════════════════════════════════════════ */}
+                <div className="mt-12 bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-2xl border-2 border-indigo-400 p-8 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-indigo-500 rounded-full mix-blend-multiply opacity-20 blur-2xl animate-pulse"></div>
+                    <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-32 h-32 bg-purple-500 rounded-full mix-blend-multiply opacity-20 blur-2xl animate-pulse" style={{ animationDelay: '2s' }}></div>
+                    
+                    <div className="relative z-10">
+                        <div className="flex items-center gap-3 mb-6">
+                            <Sparkles className="text-yellow-400 w-8 h-8" />
+                            <h2 className="text-2xl font-black text-white tracking-tight">El Resumen (TL;DR)</h2>
+                        </div>
+                        
+                        <div className="grid md:grid-cols-3 gap-6">
+                            {/* Score Box */}
+                            <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 flex flex-col items-center justify-center text-center">
+                                <span className="text-slate-300 text-sm font-bold uppercase tracking-wider mb-2">Puntaje General</span>
+                                <div className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
+                                    {safeText(result.overallScore || result.digitalHealthGrade)}
+                                </div>
+                            </div>
+
+                            {/* Top Finding */}
+                            <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 md:col-span-2">
+                                <h3 className="text-emerald-400 font-bold mb-3 flex items-center gap-2">
+                                    <CheckCircle2 size={18} /> Mayor Fortaleza Detectada
+                                </h3>
+                                <p className="text-slate-200 text-sm leading-relaxed">
+                                    {result.findings && result.findings.length > 0 
+                                        ? safeText(result.findings.filter((f: any) => f.impact === 'high' || f.impact === 'positive')[0]?.finding || result.findings[0].finding)
+                                        : "No se detectaron fortalezas claras."}
+                                </p>
+                                
+                                <h3 className="text-red-400 font-bold mt-4 mb-3 flex items-center gap-2">
+                                    <AlertTriangle size={18} /> Prioridad #1 a Resolver
+                                </h3>
+                                <p className="text-slate-200 text-sm leading-relaxed">
+                                    {result.risks && result.risks.length > 0
+                                        ? safeText(result.risks.filter((r: any) => r.severity === 'high')[0]?.risk || result.risks[0].risk)
+                                        : "No se detectaron riesgos críticos inmediatos."}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Top Opportunities */}
+                        {result.opportunities && result.opportunities.length > 0 && (
+                            <div className="mt-6 bg-white/5 backdrop-blur-md rounded-xl p-6 border border-white/10">
+                                <h3 className="text-indigo-300 font-bold mb-4 flex items-center gap-2">
+                                    <TrendingUp size={18} /> El camino para crecer (Top 3 Oportunidades)
+                                </h3>
+                                <div className="space-y-3">
+                                    {result.opportunities.slice(0, 3).map((opp: any, i: number) => (
+                                        <div key={i} className="flex gap-3">
+                                            <span className="text-indigo-400 font-black">{i + 1}.</span>
+                                            <div>
+                                                <span className="text-white font-bold text-sm block">{safeText(opp.title)}</span>
+                                                <span className="text-slate-400 text-xs block">{safeText(opp.description)}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* ── FEEDBACK + GLOSSARY ─────────────────────────────────── */}
                 <div className="mt-8 print:hidden">
                     <FeedbackModal deepDiveId={reportId} reportType="digital_audit" userId={user!.id} lang={lang} />
                 </div>

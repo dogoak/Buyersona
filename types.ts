@@ -437,7 +437,7 @@ export interface DigitalAuditInput {
   googleMapsUrl?: string;
   marketplaces?: { platform: string; storeName: string }[];
   businessType?: 'B2B' | 'B2C' | 'both';
-  competitors?: { name: string; website: string }[];
+  competitors?: { name: string; website: string; instagramUrl?: string }[];
   // Auto-detected data (populated by pre-scan)
   detectedPlatform?: string;
   detectedTools?: string[];
@@ -466,6 +466,42 @@ export interface DigitalAuditInput {
   metaAdsData?: MetaAdsScrapeResult;
   // Raw MercadoLibre data from Apify
   mercadolibreData?: MercadoLibreScrapeResult;
+  // Raw Google SERP data from Apify
+  serpData?: GoogleSerpResult[];
+  // User-declared marketing context (from onboarding)
+  paidAds?: { active: boolean; platforms?: string[] };
+  adBudgetRange?: string;
+  emailMarketing?: { active: boolean; platform?: string };
+  cartRecovery?: boolean;
+  crmTool?: { active: boolean; name?: string };
+  marketingObjective?: string;
+  marketingTeamSize?: string;
+}
+
+export interface GoogleSerpResult {
+  query: string;
+  organicResults: {
+    position: number;
+    title: string;
+    url: string;
+    description: string;
+    isSitelinks: boolean;
+    isFeaturedSnippet: boolean;
+  }[];
+  userPosition: number | null;
+  userMatchedBy: string;
+  competitorPositions: {
+    name: string;
+    position: number;
+    matchedBy: string;
+  }[];
+  userInLocalPack: boolean;
+  localPack: {
+    position: number;
+    title: string;
+    rating: number | null;
+    reviews: number;
+  }[];
 }
 
 export interface MercadoLibreScrapeResult {
