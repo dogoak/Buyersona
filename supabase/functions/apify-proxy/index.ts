@@ -545,6 +545,132 @@ serve(async (req) => {
             }
         }
 
+        // ── Google Shopping ──
+        if (action === 'scrape_google_shopping') {
+            const { queries, countryCode } = payload;
+            if (!queries || !Array.isArray(queries) || queries.length === 0) {
+                throw new Error('queries (array of strings) is required');
+            }
+
+            try {
+                const shoppingData = await callApify('apify/google-shopping-scraper', {
+                    queries: queries.slice(0, 3),
+                    countryCode: countryCode || 'ar',
+                    maxPagesPerQuery: 1,
+                }, 60000);
+
+                const items = Array.isArray(shoppingData) ? shoppingData : [shoppingData];
+                
+                // Flatten all product results across queries
+                const allProducts: any[] = [];
+                items.forEach((page: any) => {
+                    const products = page.shoppingResults || page.results || page.products || [];
+                    if (Array.isArray(products)) {
+                        products.forEach((p: any) => {
+                            const rawPrice = p.price || p.extractedPrice || p.priceString || '';
+                            const numericPrice = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.,]/g, '').replace(',', '.')) || 0;
+                            if (numericPrice > 0) {
+                                allProducts.push({
+                                    title: (p.title || p.name || '').slice(0, 120),
+                                    price: numericPrice,
+                                    priceFormatted: typeof rawPrice === 'string' ? rawPrice : `$${numericPrice.toLocaleString('es-AR')}`,
+                                    seller: p.source || p.merchant || p.seller || p.shop || 'N/A',
+                                    link: p.link || p.url || p.productLink || '',
+                                    rating: p.rating || null,
+                                    reviews: p.reviewsCount || p.reviews || null,
+                                });
+                            }
+                        });
+                    }
+                });
+
+                // Calculate stats
+                const prices = allProducts.map(p => p.price).filter(p => p > 0);
+                const avgPrice = prices.length > 0 ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0;
+                const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+                const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
+
+                return new Response(JSON.stringify({
+                    success: true,
+                    result: {
+                        query: queries.join(' | '),
+                        totalProducts: allProducts.length,
+                        averagePrice: avgPrice,
+                        lowestPrice: minPrice,
+                        highestPrice: maxPrice,
+                        topProducts: allProducts.sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 8),
+                    }
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+            } catch (e: any) {
+                console.error('Google Shopping scraper error:', e.message);
+                return new Response(JSON.stringify({ success: true, result: { totalProducts: 0, averagePrice: 0, topProducts: [] } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+        }
+
+        // ── Google Trends ──
+        if (action === 'scrape_google_trends') {
+            const { searchTerms, geo, timeRange } = payload;
+            if (!searchTerms || !Array.isArray(searchTerms) || searchTerms.length === 0) {
+                throw new Error('searchTerms (array of strings) is required');
+            }
+
+            try {
+                const trendsData = await callApify('apify/google-trends-scraper', {
+                    searchTerms: searchTerms.slice(0, 3), // max 3 terms
+                    geo: geo || 'AR',
+                    timeRange: timeRange || 'today 12-m',
+                    includeRelatedSearches: true,
+                    includeRelatedTopics: false,
+                    includeGeoData: false,
+                    includeInterestOverTime: true,
+                }, 60000);
+
+                // Normalize response
+                const items = Array.isArray(trendsData) ? trendsData : [trendsData];
+                const results = items.map((item: any) => {
+                    const term = item.searchTerm || item.keyword || searchTerms[0] || '';
+                    
+                    // Extract interest over time data points
+                    const interestOverTime = (item.interestOverTime || []).map((point: any) => ({
+                        date: point.formattedTime || point.date || '',
+                        value: typeof point.value === 'number' ? point.value : (Array.isArray(point.value) ? point.value[0] : parseInt(point.value) || 0),
+                    }));
+
+                    // Calculate trend direction from data points
+                    let trendSummary: 'rising' | 'stable' | 'declining' = 'stable';
+                    if (interestOverTime.length >= 4) {
+                        const firstQuarter = interestOverTime.slice(0, Math.floor(interestOverTime.length / 4));
+                        const lastQuarter = interestOverTime.slice(-Math.floor(interestOverTime.length / 4));
+                        const avgFirst = firstQuarter.reduce((s: number, p: any) => s + p.value, 0) / firstQuarter.length;
+                        const avgLast = lastQuarter.reduce((s: number, p: any) => s + p.value, 0) / lastQuarter.length;
+                        if (avgLast > avgFirst * 1.15) trendSummary = 'rising';
+                        else if (avgLast < avgFirst * 0.85) trendSummary = 'declining';
+                    }
+
+                    // Extract related queries
+                    const relatedQueries = (item.relatedQueries?.top || item.relatedSearches?.top || [])
+                        .slice(0, 5)
+                        .map((q: any) => q.query || q.topic || q.title || '');
+
+                    return {
+                        term,
+                        interestOverTime,
+                        trendSummary,
+                        relatedQueries,
+                        peakValue: Math.max(...interestOverTime.map((p: any) => p.value), 0),
+                        currentValue: interestOverTime.length > 0 ? interestOverTime[interestOverTime.length - 1].value : 0,
+                    };
+                });
+
+                return new Response(JSON.stringify({ success: true, result: results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+            } catch (e: any) {
+                console.error('Google Trends scraper error:', e.message);
+                return new Response(JSON.stringify({ success: true, result: [] }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+        }
+
         throw new Error(`Unknown action: ${action}`);
 
     } catch (error: any) {

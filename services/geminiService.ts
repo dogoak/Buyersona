@@ -1,6 +1,7 @@
 import { Type } from "@google/genai";
 import { callGeminiProxy } from './geminiProxyClient';
 import { BusinessInput, StrategicAnalysis, Language } from "../types";
+import { scrapeGoogleTrendsApify, GoogleTrendsResult, scrapeGoogleMapsCompetitors, MapsCompetitorResult, scrapeGoogleSerpForAnalysis, SerpCompetitorResult } from './apifyClient';
 
 export const analyzeWebsite = async (url: string, lang: Language): Promise<{ result: string, costUsd: number }> => {
     const modelName = 'gemini-2.5-flash'; // Faster model for initial scrape
@@ -61,6 +62,80 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
     // Pricing for gemini-3.1-pro-preview (approx fallback to general Pro prices): Input = $1.25 / 1M, Output = $5.00 / 1M
     const inputTokenPriceUsd = 1.25 / 1000000;
     const outputTokenPriceUsd = 5.00 / 1000000;
+
+    // ── Scrape Google Trends (fail-silent) ──
+    let trendsContext = '';
+    try {
+        const trendsTerms = [input.productName, input.businessName].filter(Boolean).slice(0, 2);
+        if (trendsTerms.length > 0) {
+            console.log('[Strategic] Scraping Google Trends for:', trendsTerms);
+            const trendsData = await scrapeGoogleTrendsApify(trendsTerms);
+            if (trendsData.length > 0) {
+                trendsContext = `
+    ═══════════════════════════════════════════
+    DATOS REALES DE GOOGLE TRENDS (últimos 12 meses, Argentina):
+    ═══════════════════════════════════════════
+    ${trendsData.map(t => `Término: "${t.term}"
+    - Tendencia: ${t.trendSummary === 'rising' ? '📈 CRECIENTE' : t.trendSummary === 'declining' ? '📉 DECRECIENTE' : '➡️ ESTABLE'}
+    - Pico de interés: ${t.peakValue}/100 | Valor actual: ${t.currentValue}/100
+    - Búsquedas relacionadas: ${t.relatedQueries.join(', ') || 'N/A'}`).join('\n    ')}
+    
+    USÁLOS para enriquecer la sección marketInsights.trends con datos REALES.
+    Si la tendencia es decreciente, MENCIONALO como un riesgo.
+    Si hay búsquedas relacionadas interesantes, USALAS para sugerir oportunidades.
+    `;
+            }
+        }
+    } catch (e) {
+        console.error('[Strategic] Google Trends failed (non-blocking):', e);
+    }
+
+    // ── Scrape Google Maps for real competitors + SERP (fail-silent, parallel) ──
+    let competitorContext = '';
+    try {
+        const businessTypes = input.businessType || [];
+        const region = input.targetRegion || 'Argentina';
+        const mapsQuery = `${businessTypes[0] || input.productName || 'negocio'} ${region}`;
+        const serpQueries = [
+            `${input.productName || input.businessName} ${region}`,
+            `comprar ${input.productName || businessTypes[0] || ''} online`,
+        ].filter(q => q.trim().length > 5);
+
+        console.log('[Strategic] Scraping Maps/SERP for:', mapsQuery, serpQueries);
+        const [mapsData, serpData] = await Promise.all([
+            scrapeGoogleMapsCompetitors(mapsQuery),
+            scrapeGoogleSerpForAnalysis(serpQueries),
+        ]);
+
+        const parts: string[] = [];
+
+        if (mapsData.length > 0) {
+            parts.push(`
+    COMPETIDORES REALES EN GOOGLE MAPS (búsqueda: "${mapsQuery}"):
+    ${mapsData.map((c, i) => `${i + 1}. "${c.name}" — ⭐ ${c.rating}/5 (${c.totalReviews} reseñas) | ${c.category} | ${c.address}${c.website ? ` | Web: ${c.website}` : ''}`).join('\n    ')}`);
+        }
+
+        if (serpData.length > 0) {
+            parts.push(`
+    QUIÉN DOMINA GOOGLE PARA ESTE RUBRO:
+    ${serpData.map(s => `Búsqueda "${s.query}":\n    ${s.topResults.map(r => `    #${r.position}: ${r.title} (${r.url})`).join('\n    ')}`).join('\n    ')}`);
+        }
+
+        if (parts.length > 0) {
+            competitorContext = `
+    ═══════════════════════════════════════════
+    DATOS REALES DE COMPETENCIA (VERIFICADOS VÍA GOOGLE):
+    ═══════════════════════════════════════════
+    ${parts.join('\n')}
+    
+    ⚠️ USÁ ESTOS COMPETIDORES REALES (no inventes).
+    En la sección 'competitors', PRIORIZÁ estos negocios verificados.
+    Incluí su rating real y cantidad de reseñas en el análisis.
+    `;
+        }
+    } catch (e) {
+        console.error('[Strategic] Competitor scraping failed (non-blocking):', e);
+    }
 
     const languageInstruction = lang === 'es'
         ? "IMPORTANT: The output JSON content MUST be in SPANISH."
@@ -147,6 +222,8 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
     === ADDITIONAL CONTEXT FROM USER ===
     ${input.additionalNotes}
     ` : ''}
+    ${trendsContext}
+    ${competitorContext}
 
     Your Goal:
     1. **Executive Summary:** Write a warm, human, professional summary. Avoid robotic language. Speak directly to the business owner.

@@ -1,6 +1,7 @@
 import { Type } from "@google/genai";
 import { callGeminiProxy } from './geminiProxyClient';
 import { DeepDiveInput, StrategicAnalysis, DeepDiveResult, Language } from "../types";
+import { scrapeGoogleTrendsApify, GoogleTrendsResult, scrapeGoogleShoppingApify, GoogleShoppingResult, scrapeMercadoLibreForPricing, MercadoLibrePricingResult, scrapeGoogleSerpForAnalysis, SerpCompetitorResult } from './apifyClient';
 
 export const analyzeProductDeepDive = async (
     parentBusinessData: StrategicAnalysis,
@@ -15,6 +16,113 @@ export const analyzeProductDeepDive = async (
     const languageInstruction = lang === 'es'
         ? "CRITICAL: ALL output JSON text content MUST be in SPANISH. Every single string value."
         : "CRITICAL: ALL output JSON text content MUST be in ENGLISH. Every single string value.";
+
+    // ── Scrape Google Trends for the product (fail-silent) ──
+    let trendsContext = '';
+    try {
+        const trendsTerms = [productInput.productName].filter(Boolean);
+        if (trendsTerms.length > 0) {
+            console.log('[DeepDive] Scraping Google Trends for:', trendsTerms);
+            const trendsData = await scrapeGoogleTrendsApify(trendsTerms);
+            if (trendsData.length > 0) {
+                trendsContext = `
+    ═══════════════════════════════════════════
+    DATOS REALES DE GOOGLE TRENDS - PRODUCTO (últimos 12 meses, Argentina):
+    ═══════════════════════════════════════════
+    ${trendsData.map(t => `Producto: "${t.term}"
+    - Tendencia de demanda: ${t.trendSummary === 'rising' ? '📈 CRECIENTE' : t.trendSummary === 'declining' ? '📉 DECRECIENTE' : '➡️ ESTABLE'}
+    - Pico de interés: ${t.peakValue}/100 | Valor actual: ${t.currentValue}/100
+    - Búsquedas relacionadas del producto: ${t.relatedQueries.join(', ') || 'N/A'}`).join('\n    ')}
+    
+    USÁ ESTOS DATOS REALES para:
+    - La sección 'seasonality': validá la estacionalidad con los picos/valles reales.
+    - La sección 'pricingStrategy': si la demanda es decreciente, recomendar precios más competitivos.
+    - La sección 'marketStrategy': si hay búsquedas relacionadas, usá esas keywords para sugerir
+      nichos de mercado o ángulos de posicionamiento.
+    `;
+            }
+        }
+    } catch (e) {
+        console.error('[DeepDive] Google Trends failed (non-blocking):', e);
+    }
+
+    // ── Scrape Google Shopping + MercadoLibre for pricing benchmark (fail-silent, parallel) ──
+    let pricingContext = '';
+    try {
+        const productQuery = productInput.productName;
+        if (productQuery) {
+            console.log('[DeepDive] Scraping pricing for:', productQuery);
+            const [shoppingData, mlData] = await Promise.all([
+                scrapeGoogleShoppingApify([productQuery]),
+                scrapeMercadoLibreForPricing(productQuery),
+            ]);
+
+            const pricingParts: string[] = [];
+
+            if (shoppingData && shoppingData.totalProducts > 0) {
+                pricingParts.push(`
+    GOOGLE SHOPPING ARGENTINA — Benchmark de Precios Reales:
+    - Productos encontrados: ${shoppingData.totalProducts}
+    - Precio PROMEDIO del mercado: $${shoppingData.averagePrice.toLocaleString('es-AR')}
+    - Precio MÁS BAJO: $${shoppingData.lowestPrice.toLocaleString('es-AR')}
+    - Precio MÁS ALTO: $${shoppingData.highestPrice.toLocaleString('es-AR')}
+    - Top sellers: ${shoppingData.topProducts.slice(0, 5).map(p => `"${p.title}" ($${p.price.toLocaleString('es-AR')}) por ${p.seller}`).join(' | ')}`);
+            }
+
+            if (mlData && mlData.found && mlData.totalProducts > 0) {
+                pricingParts.push(`
+    MERCADOLIBRE ARGENTINA — Benchmark de Precios Reales:
+    - Productos encontrados: ${mlData.totalProducts}
+    - Precio PROMEDIO: $${mlData.averagePrice.toLocaleString('es-AR')}
+    - Precio MÁS BAJO: $${mlData.lowestPrice.toLocaleString('es-AR')}
+    - Precio MÁS ALTO: $${mlData.highestPrice.toLocaleString('es-AR')}
+    - Productos más vendidos: ${mlData.products.slice(0, 5).map(p => `"${p.title}" ($${p.price.toLocaleString('es-AR')}) - ${p.soldQuantity} vendidos`).join(' | ')}`);
+            }
+
+            if (pricingParts.length > 0) {
+                pricingContext = `
+    ═══════════════════════════════════════════
+    DATOS REALES DE PRECIOS DEL MERCADO (VERIFICADOS):
+    ═══════════════════════════════════════════
+    ${pricingParts.join('\n')}
+    
+    ⚠️ USÁ ESTOS PRECIOS REALES para:
+    - La sección 'pricingStrategy': compará el precio del usuario ($${productInput.unitPrice || 'desconocido'}) contra estos promedios REALES.
+    - La sección 'unitEconomics': calculá márgenes basados en precios reales del mercado.
+    - La sección 'competitorTearDown': mencioná los sellers reales que aparecen.
+    NO INVENTES precios — usá estos datos verificados.
+    `;
+            }
+        }
+    } catch (e) {
+        console.error('[DeepDive] Pricing scrape failed (non-blocking):', e);
+    }
+
+    // ── Scrape Google SERP for the product (fail-silent) ──
+    let serpContext = '';
+    try {
+        const serpQueries = [
+            `comprar ${productInput.productName} online`,
+            productInput.productName,
+        ].filter(q => q && q.trim().length > 3);
+        if (serpQueries.length > 0) {
+            console.log('[DeepDive] Scraping SERP for:', serpQueries);
+            const serpData = await scrapeGoogleSerpForAnalysis(serpQueries);
+            if (serpData.length > 0) {
+                serpContext = `
+    ═══════════════════════════════════════════
+    QUIÉN DOMINA GOOGLE PARA ESTE PRODUCTO (VERIFICADO):
+    ═══════════════════════════════════════════
+    ${serpData.map(s => `Búsqueda "${s.query}":\n    ${s.topResults.map(r => `    #${r.position}: ${r.title} (${r.url})`).join('\n    ')}`).join('\n    ')}
+    
+    USÁ ESTOS DATOS para la sección 'competitorTearDown' y 'marketStrategy'.
+    Estos son los negocios que dominan Google para este producto.
+    `;
+            }
+        }
+    } catch (e) {
+        console.error('[DeepDive] SERP scrape failed (non-blocking):', e);
+    }
 
     // Build comprehensive parent context
     const parentContext = buildParentContext(parentBusinessData, parentOnboardingData);
@@ -181,6 +289,9 @@ export const analyzeProductDeepDive = async (
         - Tools needed (be specific: Canva, WhatsApp Business, etc.)
 
     ${languageInstruction}
+    ${trendsContext}
+    ${pricingContext}
+    ${serpContext}
     Return the data strictly in the requested JSON schema. Be extremely detailed and specific in every field.
     `;
 
