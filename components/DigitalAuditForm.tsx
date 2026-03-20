@@ -238,7 +238,7 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
     React.useEffect(() => {
         if (step !== 'review') return;
         // Load Google Maps JS API if not already loaded
-        const MAPS_KEY = 'AIzaSyBu8XGQKjHCvnb4qsjs_EaWVqv41vJuv_0';
+        const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || '';
         const scriptId = 'google-maps-script';
         if (!document.getElementById(scriptId)) {
             const script = document.createElement('script');
