@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       VitePWA({
-        registerType: 'autoUpdate',
+        registerType: 'prompt',
         includeAssets: ['favicon.png', 'og-image.png'],
         manifest: {
           name: 'Buyersona: Strategic AI Reports',
