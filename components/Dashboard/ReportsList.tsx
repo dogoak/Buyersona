@@ -264,18 +264,18 @@ export default function ReportsList() {
             </div>
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-8 sm:mb-10">
                 <button
                     onClick={() => navigate('/onboarding')}
-                    className="group relative bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-2xl p-6 text-left hover:shadow-xl hover:shadow-indigo-200 transition-all transform hover:-translate-y-1 overflow-hidden"
+                    className="group relative bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-2xl p-3 sm:p-6 flex flex-col items-center sm:items-start justify-center sm:justify-start text-center sm:text-left hover:shadow-xl hover:shadow-indigo-200 transition-all transform hover:-translate-y-1 overflow-hidden aspect-square sm:aspect-auto"
                 >
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2"></div>
-                    <div className="relative">
-                        <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                            <Rocket size={24} />
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 hidden sm:block"></div>
+                    <div className="relative flex flex-col items-center sm:items-start w-full">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-xl flex items-center justify-center mb-2 sm:mb-4 group-hover:scale-110 transition-transform">
+                            <Rocket className="w-5 h-5 sm:w-6 sm:h-6" />
                         </div>
-                        <h3 className="font-bold text-lg mb-1">Nuevo Análisis</h3>
-                        <p className="text-indigo-100 text-sm">Generá un informe estratégico completo para tu negocio</p>
+                        <h3 className="font-bold text-[11px] leading-tight sm:text-lg mb-1 sm:mb-1">Nuevo<br className="sm:hidden" /> Análisis</h3>
+                        <p className="text-indigo-100 text-sm hidden sm:block">Generá un informe estratégico completo para tu negocio</p>
                     </div>
                 </button>
 
@@ -285,13 +285,13 @@ export default function ReportsList() {
                         if (firstBiz) { navigate(`/deep-dive/new/${firstBiz.id}`); }
                         else navigate('/onboarding');
                     }}
-                    className="group bg-white rounded-2xl p-6 border border-slate-200 text-left hover:border-violet-200 hover:shadow-md transition-all transform hover:-translate-y-0.5"
+                    className="group bg-white rounded-2xl p-3 sm:p-6 border border-slate-200 flex flex-col items-center sm:items-start justify-center sm:justify-start text-center sm:text-left hover:border-violet-200 hover:shadow-md transition-all transform hover:-translate-y-0.5 aspect-square sm:aspect-auto"
                 >
-                    <div className="w-12 h-12 bg-violet-50 rounded-xl flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-                        <Search size={24} className="text-violet-600" />
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-violet-50 rounded-xl flex items-center justify-center mb-2 sm:mb-4 group-hover:scale-105 transition-transform">
+                        <Search className="w-5 h-5 sm:w-6 sm:h-6 text-violet-600" />
                     </div>
-                    <h3 className="font-bold text-slate-900 mb-1">Deep Dive de Producto</h3>
-                    <p className="text-slate-500 text-sm">Análisis táctico, competidores y plan de ventas (requiere Estrategia).</p>
+                    <h3 className="font-bold text-slate-900 text-[11px] leading-tight sm:text-lg mb-1 sm:mb-1">Deep Dive<br className="sm:hidden" /> Producto</h3>
+                    <p className="text-slate-500 text-sm hidden sm:block">Análisis táctico, competidores y plan de ventas (requiere Estrategia).</p>
                 </button>
 
                 <button
@@ -300,13 +300,13 @@ export default function ReportsList() {
                         if (firstBiz) { navigate(`/digital-audit/new/${firstBiz.id}`); }
                         else navigate('/onboarding');
                     }}
-                    className="group bg-white rounded-2xl p-6 border border-slate-200 text-left hover:border-emerald-200 hover:shadow-md transition-all transform hover:-translate-y-0.5"
+                    className="group bg-white rounded-2xl p-3 sm:p-6 border border-slate-200 flex flex-col items-center sm:items-start justify-center sm:justify-start text-center sm:text-left hover:border-emerald-200 hover:shadow-md transition-all transform hover:-translate-y-0.5 aspect-square sm:aspect-auto"
                 >
-                    <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-                        <Globe size={24} className="text-emerald-600" />
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-50 rounded-xl flex items-center justify-center mb-2 sm:mb-4 group-hover:scale-105 transition-transform">
+                        <Globe className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
                     </div>
-                    <h3 className="font-bold text-slate-900 mb-1">Auditoría Digital</h3>
-                    <p className="text-slate-500 text-sm">Diagnóstico web, SEO y redes de tu marca (requiere Estrategia).</p>
+                    <h3 className="font-bold text-slate-900 text-[11px] leading-tight sm:text-lg mb-1 sm:mb-1">Auditoría<br className="sm:hidden" /> Digital</h3>
+                    <p className="text-slate-500 text-sm hidden sm:block">Diagnóstico web, SEO y redes de tu marca (requiere Estrategia).</p>
                 </button>
             </div>
 
