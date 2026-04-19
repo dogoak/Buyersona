@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /dashboard/
+Disallow: /onboarding/
+Disallow: /deep-dive/
+Disallow: /digital-audit/
+Allow: /
+
+Sitemap: https://buyersona.com/sitemap.xml

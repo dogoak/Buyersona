@@ -935,7 +935,7 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
             </div>
 
             <Question
-              label={isIdea ? (lang === 'es' ? '¿Quién sería tu cliente ideal?' : 'Who would be your ideal customer?') : t.questions.q_target}
+              label={t.questions.q_target}
               hint={isIdea ? (lang === 'es' ? 'A quién apuntas venderle.' : 'Who you aim to sell to.') : undefined}
             >
               <div className="grid grid-cols-2 gap-4">
@@ -966,13 +966,23 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 font-bold">{formData.currency}</span>
                   <input
-                    type="number"
+                    type={formData.productPrice === 'No definido aún' || formData.productPrice === 'Not defined yet' ? 'text' : 'number'}
                     className="w-full pl-16 pr-5 py-4 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none text-lg transition-all"
                     value={formData.productPrice}
                     onChange={(e) => updateField('productPrice', e.target.value)}
                     placeholder="0.00"
+                    readOnly={formData.productPrice === 'No definido aún' || formData.productPrice === 'Not defined yet'}
                   />
                 </div>
+                <button
+                  onClick={() => updateField('productPrice', lang === 'es' ? 'No definido aún' : 'Not defined yet')}
+                  className={`mt-2 text-xs font-bold px-3 py-1.5 rounded-full transition ${formData.productPrice === 'No definido aún' || formData.productPrice === 'Not defined yet'
+                      ? 'bg-indigo-100 text-indigo-700 border border-indigo-300'
+                      : 'text-slate-400 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50'
+                    }`}
+                >
+                  {lang === 'es' ? '🤷 No sé todavía' : "🤷 I don't know yet"}
+                </button>
               </Question>
 
               <Question
@@ -987,7 +997,17 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
                   value={formData.purchaseVolume}
                   onChange={(e) => updateField('purchaseVolume', e.target.value)}
                   placeholder={lang === 'es' ? "Ej: 1 unidad, 100 usuarios, 5 cajas" : "e.g. 1 unit, 100 users, 5 boxes"}
+                  readOnly={formData.purchaseVolume === 'No definido aún' || formData.purchaseVolume === 'Not defined yet'}
                 />
+                <button
+                  onClick={() => updateField('purchaseVolume', lang === 'es' ? 'No definido aún' : 'Not defined yet')}
+                  className={`mt-2 text-xs font-bold px-3 py-1.5 rounded-full transition ${formData.purchaseVolume === 'No definido aún' || formData.purchaseVolume === 'Not defined yet'
+                      ? 'bg-indigo-100 text-indigo-700 border border-indigo-300'
+                      : 'text-slate-400 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50'
+                    }`}
+                >
+                  {lang === 'es' ? '🤷 No sé todavía' : "🤷 I don't know yet"}
+                </button>
               </Question>
             </div>
 

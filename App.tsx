@@ -10,6 +10,12 @@ import SettingsPage from './components/Dashboard/SettingsPage';
 import CheckoutPage from './components/Checkout/CheckoutPage';
 import PaymentResult from './components/Checkout/PaymentResult';
 import ResumeCheckout from './components/Checkout/ResumeCheckout';
+import DeepDivePage from './components/DeepDivePage';
+import DeepDiveCheckout from './components/Checkout/DeepDiveCheckout';
+import DigitalAuditCheckout from './components/Checkout/DigitalAuditCheckout';
+import DeepDiveView from './components/Dashboard/DeepDiveView';
+import DigitalAuditPage from './components/DigitalAuditPage';
+import DigitalAuditView from './components/Dashboard/DigitalAuditView';
 import PrivacyPolicy from './components/Legal/PrivacyPolicy';
 import TermsOfService from './components/Legal/TermsOfService';
 import Onboarding from './components/Onboarding';
@@ -199,11 +205,21 @@ function OnboardingPage({ lang }: { lang: Language }) {
       console.error('Analysis failed:', err);
       setError(err.message || 'Error al generar el análisis.');
 
+      // Capture rich error details for admin debugging
+      const errorInfo = [
+        `Error: ${err.message || 'Unknown'}`,
+        `Type: ${err.name || 'Error'}`,
+        `Browser: ${navigator.userAgent?.slice(0, 120)}`,
+        `Time: ${new Date().toISOString()}`,
+        `Online: ${navigator.onLine}`,
+        err.stack ? `Stack: ${err.stack.split('\n').slice(0, 3).join(' → ')}` : '',
+      ].filter(Boolean).join(' | ');
+
       await supabase
         .from('business_reports')
         .update({
           status: 'failed',
-          error_details: err.message || 'Unknown Error'
+          error_details: errorInfo
         })
         .eq('id', reportId);
 
@@ -320,6 +336,44 @@ function App() {
           <Route path="/checkout/:reportId" element={
             <PrivateRoute>
               <ResumeCheckout />
+            </PrivateRoute>
+          } />
+
+          {/* Deep Dive Routes */}
+          <Route path="/deep-dive/new/:reportId" element={
+            <PrivateRoute>
+              <DeepDivePage lang={lang} setLang={setLang} />
+            </PrivateRoute>
+          } />
+
+          <Route path="/deep-dive/checkout/:analysisId" element={
+            <PrivateRoute>
+              <DeepDiveCheckout />
+            </PrivateRoute>
+          } />
+
+          <Route path="/deep-dive/report/:reportId" element={
+            <PrivateRoute>
+              <DeepDiveView />
+            </PrivateRoute>
+          } />
+
+          {/* Digital Audit Routes */}
+          <Route path="/digital-audit/new/:reportId" element={
+            <PrivateRoute>
+              <DigitalAuditPage lang={lang} setLang={setLang} />
+            </PrivateRoute>
+          } />
+
+          <Route path="/digital-audit/checkout/:auditId" element={
+            <PrivateRoute>
+              <DigitalAuditCheckout />
+            </PrivateRoute>
+          } />
+
+          <Route path="/digital-audit/report/:reportId" element={
+            <PrivateRoute>
+              <DigitalAuditView />
             </PrivateRoute>
           } />
 

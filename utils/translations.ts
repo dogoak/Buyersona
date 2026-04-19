@@ -47,12 +47,12 @@ export const translations = {
         q_dist_model: "Distribution Model (Identity)",
         q_offering: "What do you primarily sell?",
         q_diff: "How is your product positioned?",
-        
+
         // Product Step
         q_what_sell: "What do you sell?",
         q_what_sell_hint: "Describe it in one specific sentence (e.g., 'Inventory software for SMEs').",
         q_target_scope: "Who is this product for?",
-        
+
         // B2B Specifics
         q_b2b_use: "How does the client use it?",
         q_b2b_role: "Who usually buys it? (Select all)",
@@ -71,19 +71,19 @@ export const translations = {
         q_secondary_benefits: "What other benefits do you provide?",
         q_inaction: "What happens if they DON'T use it?",
         q_inaction_hint: "e.g., They lose money, they get fined, they waste time.",
-        
+
         q_market_pos: "Market Positioning",
         q_price_rel: "How expensive is it for the client?",
         q_freq: "Is it used every day?",
 
-        q_target: "Who do you bill today?",
+        q_target: "Who is or would be your ideal customer?",
         q_payment_model: "How does a customer normally pay you?",
         q_transaction_value: "Typical Transaction Value",
         q_transaction_hint: "Is this per unit or average ticket?",
         q_transaction_custom: "Enter specific value:",
         q_ltv: "Lifetime Value (LTV)",
         q_cycle: "Sales Cycle Duration",
-        
+
         // Channels
         q_sales_channels: "Where does the transaction happen? (Sales)",
         q_channels: "How do they find you? (Marketing)",
@@ -91,15 +91,15 @@ export const translations = {
         q_best_channel: "Which channel brings the BEST clients (Quality)?",
         q_best_client_channel: "Which channel brought your SINGLE best client ever?",
         q_vol_channel: "Which channel brings the MOST clients (Volume)?",
-        
+
         q_ad_spend: "Monthly Ad Budget (Estimate)",
         q_ad_spend_custom: "Enter specific budget:",
-        
+
         q_prospecting: "Where SHOULD we find new clients? (Perception)",
         q_prospecting_other: "Other source...",
         q_prospecting_output: "What do you want to receive? (Select all)",
-        q_explore_secondary: "Do you want to explore a secondary market?", 
-        
+        q_explore_secondary: "Do you want to explore a secondary market?",
+
         q_predictability: "Is your lead flow predictable?",
         q_response: "What happens when someone asks for info?",
         q_team: "How many people handle sales/leads?",
@@ -154,7 +154,7 @@ export const translations = {
         b2b_prob_risk: "Reduce Risk/Compliance",
         b2b_prob_efficiency: "Save Time/Efficiency",
         b2b_prob_resale: "Product for Resale",
-        
+
         // B2B Drivers
         b2b_driver_margin: "Profit Margin / ROI",
         b2b_driver_reliability: "Reliability / Trust",
@@ -173,7 +173,7 @@ export const translations = {
         b2c_prob_health: "Health / Wellbeing",
         b2c_prob_status: "Social Status / Image",
         b2c_prob_convenience: "Convenience / Ease",
-        
+
         // B2C Drivers
         b2c_driver_price: "Price / Deal",
         b2c_driver_brand: "Brand / Love",
@@ -195,7 +195,7 @@ export const translations = {
         ready_yes: "Yes, fully ready",
         ready_partial: "Partial / Manual",
         ready_no: "No, operationally risky",
-        
+
         prob_other: "Other...",
         driver_other: "Other...",
 
@@ -230,12 +230,12 @@ export const translations = {
         pay_subscription: "Subscription",
         pay_usage: "Pay per Usage",
         pay_freemium: "Freemium",
-        
+
         pay_onetime: "One-time Purchase", // Legacy
         pay_repeated: "Repeated Purchases",
         pay_monthly: "Monthly Contract",
         pay_project: "Specific Project",
-        
+
         // LTV
         ltv_single: "Buy once",
         ltv_multiple: "Buy multiple times",
@@ -252,12 +252,12 @@ export const translations = {
         ad_low: "Low (< 500 USD)",
         ad_med: "Medium (500 - 2k USD)",
         ad_high: "High (> 2k USD)",
-        
+
         out_companies: "Company List",
         out_profiles: "Profiles / Contact Info",
         out_queries: "Search Keywords",
         out_messages: "Outreach Scripts",
-        out_sales: "Sales Tactics", 
+        out_sales: "Sales Tactics",
 
         // Operations
         sla_instant: "< 5 min",
@@ -279,7 +279,7 @@ export const translations = {
         lose: "We lose them",
         bad: "Response quality drops",
         handle: "We can handle it",
-        
+
         // Pains
         no_clients: "Not enough clients",
         bad_clients: "Low quality clients",
@@ -306,29 +306,29 @@ export const translations = {
       start_over: "Start Over",
       download_report: "Download Report",
       exec_summary: "Executive Analysis",
-      
+
       // Market Pulse
       market_pulse: "Market Pulse",
       growth_opps: "Growth Opportunities",
       blue_ocean: "Blue Ocean Strategy",
       market_trends: "Trends",
       market_benchmarks: "Industry Benchmarks",
-      
+
       demand_map: "Your Buyer Personas",
       demand_sub: "Detailed profile and strategic battle card for each target.",
-      
+
       // Battle Card
       tab_profile: "Deep Profile",
       tab_strategy: "How to Win",
-      
+
       strat_channel: "Best Channel",
       strat_hook: "Marketing Hook",
       strat_content: "Content Strategy",
       strat_offer: "Offer Angle",
-      
+
       operational_check: "Operational Reality Check",
       max_leads: "Max Leads/Mo",
-      
+
       action_plan: "Your Action Plan",
       generated_by: "Generated by BUYERSONA AI",
 
@@ -344,7 +344,7 @@ export const translations = {
       p_economic: "Economic Profile",
       p_maturity: "Maturity Stage",
       p_friction: "Friction & Barriers",
-      
+
       // Labels
       lbl_role: "Role",
       lbl_industry: "Industry",
@@ -412,7 +412,7 @@ export const translations = {
         q_dist_model: "¿Modelo de Distribución (Identidad)?",
         q_offering: "¿Qué vendés principalmente?",
         q_diff: "¿Cómo se posiciona lo que vendés?",
-        
+
         // Product
         q_what_sell: "¿Qué vendés?",
         q_what_sell_hint: "Descríbelo en una frase concreta (ej: 'Software de inventario para PyMES').",
@@ -436,19 +436,19 @@ export const translations = {
         q_secondary_benefits: "¿Qué otros beneficios brindás?",
         q_inaction: "¿Qué pasa si NO lo usan?",
         q_inaction_hint: "Ej: Pierden dinero, los multan, pierden tiempo.",
-        
+
         q_market_pos: "¿Tu producto es más...?",
         q_price_rel: "¿Qué tan caro es para tu cliente?",
         q_freq: "¿Se usa todos los días?",
 
-        q_target: "¿A quién le facturás hoy?",
+        q_target: "¿Quién es o quién sería tu cliente ideal?",
         q_payment_model: "¿Cómo te paga normalmente un cliente?",
         q_transaction_value: "Valor de Transacción Típico",
         q_transaction_hint: "¿Es por unidad o ticket promedio?",
         q_transaction_custom: "Ingresá el valor exacto:",
         q_ltv: "Lifetime Value (LTV)",
         q_cycle: "¿Tiempo desde contacto hasta pago?",
-        
+
         // Channels
         q_sales_channels: "¿Dónde ocurre la transacción? (Venta)",
         q_channels: "¿Cómo te encuentran? (Marketing)",
@@ -456,14 +456,14 @@ export const translations = {
         q_best_channel: "¿Qué canal te trae los MEJORES clientes (Calidad)?",
         q_best_client_channel: "¿Qué canal te trajo tu MEJOR cliente histórico?",
         q_vol_channel: "¿Qué canal te trae MÁS clientes (Volumen)?",
-        
+
         q_ad_spend: "Presupuesto Publicitario Mensual (Estimado)",
         q_ad_spend_custom: "Ingresá presupuesto exacto:",
-        
+
         q_prospecting: "¿Dónde CREES que deberíamos buscar clientes? (Percepción)",
         q_prospecting_other: "Otra fuente...",
         q_prospecting_output: "¿Qué querés recibir de esto? (Seleccioná varios)",
-        q_explore_secondary: "¿Querés explorar un mercado secundario?", 
+        q_explore_secondary: "¿Querés explorar un mercado secundario?",
 
         q_predictability: "¿Tenés un flujo predecible?",
         q_response: "¿Qué pasa cuando alguien pide info?",
@@ -502,7 +502,7 @@ export const translations = {
         scope_b2c: "Consumidor Final (B2C)",
         scope_both: "Ambos Mercados",
 
-         // B2B Use Cases
+        // B2B Use Cases
         b2b_use_resale: "Reventa / Generar Ingresos",
         b2b_use_input: "Insumo / Materia Prima",
         b2b_use_ops: "Eficiencia / Operaciones",
@@ -513,13 +513,13 @@ export const translations = {
         b2b_role_ops: "Gerente de Operaciones",
         b2b_role_marketing: "Marketing / Ventas",
 
-         // B2B Problems
+        // B2B Problems
         b2b_prob_revenue: "Aumentar Ventas/Ingresos",
         b2b_prob_cost: "Reducir Costos",
         b2b_prob_risk: "Reducir Riesgo/Compliance",
         b2b_prob_efficiency: "Ahorrar Tiempo/Eficiencia",
         b2b_prob_resale: "Producto para Revender",
-        
+
         // B2B Drivers
         b2b_driver_margin: "Margen de Ganancia / ROI",
         b2b_driver_reliability: "Confiabilidad / Seguridad",
@@ -538,7 +538,7 @@ export const translations = {
         b2c_prob_health: "Salud / Bienestar",
         b2c_prob_status: "Estatus Social / Imagen",
         b2c_prob_convenience: "Conveniencia / Facilidad",
-        
+
         // B2C Drivers
         b2c_driver_price: "Precio / Oferta",
         b2c_driver_brand: "Marca / Amor",
@@ -556,11 +556,11 @@ export const translations = {
         explore_yes_b2b: "Sí, explorar oportunidades B2B",
         explore_no: "No, enfocar en lo actual",
 
-         // Readiness
+        // Readiness
         ready_yes: "Sí, totalmente listo",
         ready_partial: "Parcial / Manual",
         ready_no: "No, riesgo operativo",
-        
+
         prob_other: "Otro...",
         driver_other: "Otro...",
 
@@ -617,12 +617,12 @@ export const translations = {
         ad_low: "Bajo (< 500 USD)",
         ad_med: "Medio (500 - 2k USD)",
         ad_high: "Alto (> 2k USD)",
-        
+
         out_companies: "Listado de Empresas",
         out_profiles: "Perfiles / Contactos",
         out_queries: "Ideas de Búsqueda",
         out_messages: "Mensajes de Contacto",
-        out_sales: "Tácticas de Cierre", 
+        out_sales: "Tácticas de Cierre",
 
         // Operations
         sla_instant: "< 5 min",
@@ -644,7 +644,7 @@ export const translations = {
         lose: "Las perdemos",
         bad: "Respondemos mal",
         handle: "Podemos manejarlas",
-        
+
         // Pains
         no_clients: "No entran clientes",
         bad_clients: "Entran malos clientes",
@@ -671,7 +671,7 @@ export const translations = {
       start_over: "Reiniciar",
       download_report: "Descargar Reporte",
       exec_summary: "Análisis Ejecutivo",
-      
+
       // Market Pulse
       market_pulse: "Pulso del Mercado",
       growth_opps: "Oportunidades de Crecimiento",
@@ -681,7 +681,7 @@ export const translations = {
 
       demand_map: "Mapa de Demanda",
       demand_sub: "A quién deberías venderle, categorizado por valor estratégico.",
-      
+
       // Battle Card
       tab_profile: "Perfil Profundo",
       tab_strategy: "Cómo Ganar",
@@ -693,7 +693,7 @@ export const translations = {
 
       operational_check: "Chequeo Operativo",
       max_leads: "Capacidad Máx.",
-      
+
       action_plan: "Tu Plan de Acción",
       generated_by: "Generado por BUYERSONA AI",
 

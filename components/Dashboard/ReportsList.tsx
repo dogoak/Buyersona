@@ -5,27 +5,38 @@ import { supabase } from '../../services/supabaseClient';
 import {
     FileText, Plus, Clock, CheckCircle, Loader2,
     Eye, Trash2, Share2, Download, BarChart3, ArrowRight, XCircle,
-    Rocket, Target, TrendingUp, Sparkles, Building2, CreditCard
+    Rocket, Target, TrendingUp, Sparkles, Building2, CreditCard, Search, Heart, Globe, Zap
 } from 'lucide-react';
+import { analyzeProductDeepDive } from '../../services/geminiDeepDiveService';
+import { StrategicAnalysis, DeepDiveInput } from '../../types';
+import ServicesModal from '../ServicesModal';
 
 interface Report {
     id: string;
     business_name: string;
     status: string;
     is_paid: boolean;
+    is_voluntary_payment?: boolean;
+    payment_status?: string;
     created_at: string;
     updated_at: string;
     onboarding_data: any;
-    analysis_result: any;
+    analysis_result?: any;
     current_step: number;
+    type?: 'business' | 'product' | 'digital_audit';
+    parent_report_id?: string;
+    parent_analysis_result?: any;
 }
 
 export default function ReportsList() {
-    const { user } = useAuth();
+    const { user, lang } = useAuth();
     const navigate = useNavigate();
     const [reports, setReports] = useState<Report[]>([]);
     const [loading, setLoading] = useState(true);
     const [deleting, setDeleting] = useState<string | null>(null);
+    const [payingVoluntary, setPayingVoluntary] = useState<string | null>(null);
+    const [servicesModalOpen, setServicesModalOpen] = useState(false);
+    const [servicesModalReportId, setServicesModalReportId] = useState('');
 
     const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'Usuario';
     const firstName = userName.split(' ')[0];
@@ -38,14 +49,64 @@ export default function ReportsList() {
         if (!user) return;
 
         try {
-            const { data, error } = await supabase
+            const { data: businessData, error: businessError } = await supabase
                 .from('business_reports')
-                .select('*')
+                .select('id, user_id, created_at, updated_at, business_name, status, is_paid, is_voluntary_payment, payment_status, onboarding_data, current_step, api_cost_usd')
                 .eq('user_id', user.id)
                 .order('created_at', { ascending: false });
 
-            if (error) throw error;
-            setReports(data || []);
+            if (businessError) throw businessError;
+
+            const { data: productData, error: productError } = await supabase
+                .from('product_analyses')
+                .select('id, status, is_paid, created_at, updated_at, product_input_data, analysis_result, business_report_id, business_reports!product_analyses_business_report_id_fkey!inner(business_name)')
+                .eq('business_reports.user_id', user.id)
+                .order('created_at', { ascending: false });
+
+            if (productError) throw productError;
+
+            // Fetch digital audits
+            const { data: auditData, error: auditError } = await supabase
+                .from('digital_audits')
+                .select('id, status, is_paid, created_at, updated_at, audit_input, audit_result, business_report_id, business_reports!digital_audits_business_report_id_fkey!inner(business_name)')
+                .eq('business_reports.user_id', user.id)
+                .order('created_at', { ascending: false });
+
+            if (auditError) console.warn('Digital audits fetch error (non-blocking):', auditError);
+
+            const unifiedReports: Report[] = [
+                ...(businessData || []).map(r => ({ ...r, type: 'business' as const })),
+                ...(productData || []).map((p: any) => ({
+                    id: p.id,
+                    business_name: `${p.business_reports.business_name} | ${(p.product_input_data as any)?.productName || 'Producto'}`,
+                    status: p.status,
+                    is_paid: p.is_paid,
+                    created_at: p.created_at,
+                    updated_at: p.updated_at,
+                    onboarding_data: p.product_input_data,
+                    analysis_result: p.analysis_result,
+                    current_step: 7,
+                    type: 'product' as const,
+                    parent_report_id: p.business_report_id,
+                    parent_analysis_result: null
+                })),
+                ...(auditData || []).map((a: any) => ({
+                    id: a.id,
+                    business_name: `${a.business_reports.business_name} | Auditoría Digital`,
+                    status: a.status,
+                    is_paid: a.is_paid,
+                    created_at: a.created_at,
+                    updated_at: a.updated_at,
+                    onboarding_data: a.audit_input,
+                    analysis_result: a.audit_result,
+                    current_step: 7,
+                    type: 'digital_audit' as const,
+                    parent_report_id: a.business_report_id,
+                    parent_analysis_result: null
+                }))
+            ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+            setReports(unifiedReports);
         } catch (err) {
             console.error('Error fetching reports:', err);
         } finally {
@@ -53,14 +114,61 @@ export default function ReportsList() {
         }
     };
 
-    const handleDelete = async (reportId: string, e: React.MouseEvent) => {
+    useEffect(() => {
+        const pendingProduct = reports.find(r => r.type === 'product' && r.is_paid && r.status === 'draft');
+        if (pendingProduct) {
+            generateDeepDive(pendingProduct);
+        }
+    }, [reports]);
+
+    const generateDeepDive = async (report: Report) => {
+        setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: 'analyzing' } : r));
+        await supabase.from('product_analyses').update({ status: 'analyzing' }).eq('id', report.id);
+
+        try {
+            // Fetch parent analysis result AND onboarding data on-demand
+            const { data: parentData, error: pError } = await supabase
+                .from('business_reports')
+                .select('analysis_result, onboarding_data')
+                .eq('id', report.parent_report_id)
+                .single();
+
+            if (pError || !parentData?.analysis_result) throw new Error('Parent analysis result not found');
+
+            const parentResult = parentData.analysis_result as StrategicAnalysis;
+            const inputData = report.onboarding_data as DeepDiveInput;
+
+            // Strip heavy base64 fields from onboarding data
+            let parentOnboarding: Record<string, any> | null = null;
+            if (parentData.onboarding_data) {
+                const { productImages, documents, ...light } = parentData.onboarding_data as any;
+                parentOnboarding = light;
+            }
+
+            const { result } = await analyzeProductDeepDive(parentResult, parentOnboarding, inputData, lang);
+
+            await supabase
+                .from('product_analyses')
+                .update({ status: 'completed', analysis_result: result })
+                .eq('id', report.id);
+
+            setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: 'completed', analysis_result: result } : r));
+        } catch (err) {
+            console.error('Failed deep dive gen:', err);
+            await supabase.from('product_analyses').update({ status: 'failed' }).eq('id', report.id);
+            setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: 'failed' } : r));
+        }
+    };
+
+    const handleDelete = async (reportId: string, type: 'business' | 'product' | 'digital_audit', e: React.MouseEvent) => {
         e.stopPropagation();
         if (!confirm('¿Estás seguro de que querés eliminar este reporte?')) return;
 
         setDeleting(reportId);
         try {
+            const table = type === 'business' ? 'business_reports' : type === 'product' ? 'product_analyses' : 'digital_audits';
             const { error } = await supabase
-                .from('business_reports')
+                .from(table)
                 .delete()
                 .eq('id', reportId);
 
@@ -73,8 +181,18 @@ export default function ReportsList() {
         }
     };
 
-    const getStatusConfig = (status: string, isPaid: boolean) => {
+    const getStatusConfig = (report: Report) => {
+        const { status, is_paid, is_voluntary_payment, payment_status } = report;
         if (status === 'completed') {
+            if (is_paid && !is_voluntary_payment) {
+                return { label: 'Pagado', icon: CheckCircle, colors: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+            }
+            if (is_voluntary_payment && payment_status === 'paid') {
+                return { label: 'Voluntario ✓', icon: Heart, colors: 'bg-purple-50 text-purple-700 border-purple-200' };
+            }
+            if (is_voluntary_payment && payment_status !== 'paid') {
+                return { label: 'Gratuito (Beta)', icon: Sparkles, colors: 'bg-blue-50 text-blue-700 border-blue-200' };
+            }
             return { label: 'Completo', icon: CheckCircle, colors: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
         }
         if (status === 'analyzing') {
@@ -162,24 +280,34 @@ export default function ReportsList() {
                 </button>
 
                 <button
-                    onClick={() => navigate('/onboarding')}
-                    className="group bg-white rounded-2xl p-6 border border-slate-200 text-left hover:border-indigo-200 hover:shadow-md transition-all transform hover:-translate-y-0.5"
+                    onClick={() => {
+                        const firstBiz = reports.find(r => r.type === 'business' && r.status === 'completed');
+                        if (firstBiz) { navigate(`/deep-dive/new/${firstBiz.id}`); }
+                        else navigate('/onboarding');
+                    }}
+                    className="group bg-white rounded-2xl p-6 border border-slate-200 text-left hover:border-violet-200 hover:shadow-md transition-all transform hover:-translate-y-0.5"
                 >
-                    <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-                        <Target size={24} className="text-emerald-600" />
+                    <div className="w-12 h-12 bg-violet-50 rounded-xl flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                        <Search size={24} className="text-violet-600" />
                     </div>
-                    <h3 className="font-bold text-slate-900 mb-1">Buyer Personas</h3>
-                    <p className="text-slate-500 text-sm">Incluido en cada análisis: perfiles detallados de tus compradores ideales</p>
+                    <h3 className="font-bold text-slate-900 mb-1">Deep Dive de Producto</h3>
+                    <p className="text-slate-500 text-sm">Análisis táctico, competidores y plan de ventas (requiere Estrategia).</p>
                 </button>
 
-                <div className="bg-white rounded-2xl p-6 border border-slate-200 text-left relative overflow-hidden opacity-75">
-                    <div className="absolute top-3 right-3 bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">PRONTO</div>
-                    <div className="w-12 h-12 bg-violet-50 rounded-xl flex items-center justify-center mb-4">
-                        <TrendingUp size={24} className="text-violet-600" />
+                <button
+                    onClick={() => {
+                        const firstBiz = reports.find(r => r.type === 'business' && r.status === 'completed');
+                        if (firstBiz) { navigate(`/digital-audit/new/${firstBiz.id}`); }
+                        else navigate('/onboarding');
+                    }}
+                    className="group bg-white rounded-2xl p-6 border border-slate-200 text-left hover:border-emerald-200 hover:shadow-md transition-all transform hover:-translate-y-0.5"
+                >
+                    <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                        <Globe size={24} className="text-emerald-600" />
                     </div>
-                    <h3 className="font-bold text-slate-900 mb-1">Product Deep Dive</h3>
-                    <p className="text-slate-500 text-sm">Análisis profundo de un producto, basado en el contexto de tu empresa</p>
-                </div>
+                    <h3 className="font-bold text-slate-900 mb-1">Auditoría Digital</h3>
+                    <p className="text-slate-500 text-sm">Diagnóstico web, SEO y redes de tu marca (requiere Estrategia).</p>
+                </button>
             </div>
 
             {/* Empty State */}
@@ -224,7 +352,7 @@ export default function ReportsList() {
 
                     <div className="space-y-3">
                         {reports.map((report) => {
-                            const statusConfig = getStatusConfig(report.status, report.is_paid);
+                            const statusConfig = getStatusConfig(report);
                             const StatusIcon = statusConfig.icon;
                             const isClickable = report.status === 'completed' || report.status === 'draft';
 
@@ -232,9 +360,15 @@ export default function ReportsList() {
                                 <div
                                     key={report.id}
                                     onClick={() => {
-                                        if (report.status === 'completed') navigate(`/dashboard/report/${report.id}`);
+                                        if (report.status === 'completed') {
+                                            if (report.type === 'product') navigate(`/deep-dive/report/${report.id}`);
+                                            else if (report.type === 'digital_audit') navigate(`/digital-audit/report/${report.id}`);
+                                            else navigate(`/dashboard/report/${report.id}`);
+                                        }
                                         if (report.status === 'draft') {
-                                            if (report.current_step >= 6) navigate(`/checkout/${report.id}`);
+                                            if (report.type === 'product') navigate(`/deep-dive/checkout/${report.id}`);
+                                            else if (report.type === 'digital_audit') navigate(`/digital-audit/checkout/${report.id}`);
+                                            else if (report.current_step >= 6) navigate(`/checkout/${report.id}`);
                                             else navigate(`/onboarding/${report.id}`);
                                         }
                                     }}
@@ -243,13 +377,18 @@ export default function ReportsList() {
                                         : ''
                                         }`}
                                 >
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                         {/* Report Info */}
                                         <div className="flex items-center gap-4 flex-1 min-w-0">
-                                            <div className="w-12 h-12 bg-gradient-to-br from-indigo-50 to-violet-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
-                                                <BarChart3 size={22} className="text-indigo-600" />
+                                            <div className={`w-12 h-12 bg-gradient-to-br rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform ${report.type === 'digital_audit' ? 'from-emerald-50 to-teal-50' : 'from-indigo-50 to-violet-50'}`}>
+                                                {report.type === 'product' ? <Search size={22} className="text-violet-600" /> : report.type === 'digital_audit' ? <Globe size={22} className="text-emerald-600" /> : <BarChart3 size={22} className="text-indigo-600" />}
                                             </div>
                                             <div className="min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${report.type === 'product' ? 'bg-violet-100 text-violet-700' : report.type === 'digital_audit' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                                        {report.type === 'product' ? 'Product Deep Dive' : report.type === 'digital_audit' ? 'Auditoría Digital' : 'Análisis Estratégico'}
+                                                    </span>
+                                                </div>
                                                 <h3 className="text-lg font-bold text-slate-900 truncate group-hover:text-indigo-700 transition-colors">
                                                     {report.business_name || 'Sin nombre'}
                                                 </h3>
@@ -264,23 +403,34 @@ export default function ReportsList() {
                                         </div>
 
                                         {/* Actions */}
-                                        <div className="flex items-center gap-1.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                        <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
                                             {isClickable && (
                                                 <>
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/report/${report.id}`); }}
-                                                        className="flex items-center gap-1.5 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (report.type === 'product') navigate(`/deep-dive/report/${report.id}`);
+                                                            else if (report.type === 'digital_audit') navigate(`/digital-audit/report/${report.id}`);
+                                                            else navigate(`/dashboard/report/${report.id}`);
+                                                        }}
+                                                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition ${report.type === 'product'
+                                                            ? 'bg-violet-50 text-violet-700 hover:bg-violet-100'
+                                                            : report.type === 'digital_audit'
+                                                                ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                                : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                                                            }`}
                                                     >
                                                         <Eye size={14} /> Ver
                                                     </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); /* TODO: navigate to deep dive */ }}
-                                                        title="Product Deep Dive (Próximamente)"
-                                                        className="relative flex items-center gap-1.5 px-3 py-2 bg-violet-50 text-violet-600 rounded-lg text-sm font-semibold hover:bg-violet-100 transition"
-                                                    >
-                                                        <TrendingUp size={14} /> Deep Dive
-                                                        <span className="absolute -top-1.5 -right-1.5 bg-amber-400 text-[8px] font-bold text-white px-1.5 py-0.5 rounded-full leading-none">PRONTO</span>
-                                                    </button>
+                                                    {report.type === 'business' && report.status === 'completed' && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setServicesModalReportId(report.id); setServicesModalOpen(true); }}
+                                                            title="Análisis Avanzados"
+                                                            className="relative flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-violet-50 to-emerald-50 text-indigo-600 rounded-lg text-sm font-semibold hover:shadow-md transition border border-indigo-100"
+                                                        >
+                                                            <Zap size={14} /> Más Análisis
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={(e) => e.stopPropagation()}
                                                         title="Compartir"
@@ -300,8 +450,13 @@ export default function ReportsList() {
                                             {report.status === 'draft' && (
                                                 (report.current_step >= 6 || report.current_step === null || report.current_step === undefined) ? (
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); navigate(`/checkout/${report.id}`); }}
-                                                        className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-lg text-sm font-bold hover:shadow-lg transition"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (report.type === 'product') navigate(`/deep-dive/checkout/${report.id}`);
+                                                            else navigate(`/checkout/${report.id}`);
+                                                        }}
+                                                        className={`flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-sm font-bold hover:shadow-lg transition ${report.type === 'product' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600' : 'bg-gradient-to-r from-indigo-600 to-violet-600'
+                                                            }`}
                                                     >
                                                         <CreditCard size={14} /> Pagar
                                                     </button>
@@ -314,16 +469,82 @@ export default function ReportsList() {
                                                     </button>
                                                 )
                                             )}
+                                            {/* Voluntary payment button for completed Beta reports */}
+                                            {report.status === 'completed' && report.is_voluntary_payment && report.payment_status !== 'paid' && (
+                                                <button
+                                                    disabled={payingVoluntary === report.id}
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        setPayingVoluntary(report.id);
+                                                        try {
+                                                            const session = await supabase.auth.getSession();
+                                                            const token = session.data.session?.access_token;
+                                                            if (!token) throw new Error('Sesión expirada');
+                                                            const response = await fetch(
+                                                                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment`,
+                                                                {
+                                                                    method: 'POST',
+                                                                    headers: {
+                                                                        'Content-Type': 'application/json',
+                                                                        'Authorization': `Bearer ${token}`,
+                                                                        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                                                                    },
+                                                                    body: JSON.stringify({
+                                                                        report_id: report.id,
+                                                                        success_url: `${window.location.origin}/dashboard/payment/success?report_id=${report.id}`,
+                                                                        failure_url: `${window.location.origin}/dashboard/payment/failure?report_id=${report.id}`,
+                                                                    }),
+                                                                }
+                                                            );
+                                                            const data = await response.json();
+                                                            if (!response.ok) throw new Error(data.error || 'Error');
+                                                            const isLocal = window.location.hostname === 'localhost';
+                                                            window.location.href = isLocal ? (data.sandbox_init_point || data.init_point) : (data.init_point || data.sandbox_init_point);
+                                                        } catch (err: any) {
+                                                            alert('Error al iniciar pago: ' + err.message);
+                                                            setPayingVoluntary(null);
+                                                        }
+                                                    }}
+                                                    className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white rounded-lg text-xs font-bold hover:shadow-lg transition disabled:opacity-70"
+                                                >
+                                                    {payingVoluntary === report.id ? (
+                                                        <><Loader2 size={12} className="animate-spin" /> Procesando...</>
+                                                    ) : (
+                                                        <><Heart size={12} className="hover:animate-pulse" /> Apoyar</>
+                                                    )}
+                                                </button>
+                                            )}
                                             {report.status === 'failed' && (
                                                 <button
-                                                    onClick={(e) => { e.stopPropagation(); navigate('/onboarding'); }}
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        if (report.type === 'digital_audit') {
+                                                            // Reset digital audit to pending so it re-generates
+                                                            await supabase.from('digital_audits').update({ status: 'pending' }).eq('id', report.id);
+                                                            navigate(`/digital-audit/report/${report.id}`);
+                                                        } else {
+                                                            navigate('/onboarding');
+                                                        }
+                                                    }}
                                                     className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-700 rounded-lg text-sm font-semibold hover:bg-amber-100 transition"
                                                 >
                                                     Reintentar
                                                 </button>
                                             )}
+                                            {report.status === 'analyzing' && report.type === 'digital_audit' && (
+                                                <button
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        await supabase.from('digital_audits').update({ status: 'pending' }).eq('id', report.id);
+                                                        navigate(`/digital-audit/report/${report.id}`);
+                                                    }}
+                                                    className="flex items-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold hover:bg-blue-100 transition"
+                                                >
+                                                    🔄 Reintentar análisis
+                                                </button>
+                                            )}
                                             <button
-                                                onClick={(e) => handleDelete(report.id, e)}
+                                                onClick={(e) => handleDelete(report.id, report.type || 'business', e)}
                                                 disabled={deleting === report.id}
                                                 title="Eliminar"
                                                 className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
@@ -342,6 +563,14 @@ export default function ReportsList() {
                     </div>
                 </div>
             )}
+
+            {/* Services Modal */}
+            <ServicesModal
+                isOpen={servicesModalOpen}
+                onClose={() => setServicesModalOpen(false)}
+                reportId={servicesModalReportId}
+                lang={lang}
+            />
         </div>
     );
 }

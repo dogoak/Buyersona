@@ -6,7 +6,12 @@ import { Dashboard } from '../Dashboard';
 import AnalysisLoader from '../AnalysisLoader';
 import { analyzeBusinessGrowth } from '../../services/geminiService';
 import { Language, StrategicAnalysis } from '../../types';
-import { ArrowLeft, Loader2, Download, AlertCircle, Heart, CreditCard } from 'lucide-react';
+import { ArrowLeft, Loader2, Download, AlertCircle, Heart, CreditCard, TrendingUp, Search, Zap, ArrowRight, Sparkles, Globe } from 'lucide-react';
+import ProfundizarPanel from '../ProfundizarPanel';
+import GlossaryModal from '../GlossaryModal';
+import FeedbackModal from '../FeedbackModal';
+import ServicesModal from '../ServicesModal';
+import EnrichmentCards from './EnrichmentCards';
 
 interface ReportViewProps {
     lang: Language;
@@ -21,8 +26,14 @@ export default function ReportView({ lang }: ReportViewProps) {
     const [error, setError] = useState<string | null>(null);
     const [downloading, setDownloading] = useState(false);
     const [isPaying, setIsPaying] = useState(false);
+    const [linkedDeepDives, setLinkedDeepDives] = useState<any[]>([]);
+    const [linkedAudits, setLinkedAudits] = useState<any[]>([]);
+    const [profundizarOpen, setProfundizarOpen] = useState(false);
+    const [profundizarSection, setProfundizarSection] = useState<{ title: string; content: string } | null>(null);
+    const [servicesModalOpen, setServicesModalOpen] = useState(false);
 
     useEffect(() => {
+        window.scrollTo(0, 0);
         fetchReport();
     }, [reportId]);
 
@@ -47,7 +58,29 @@ export default function ReportView({ lang }: ReportViewProps) {
     };
 
     useEffect(() => {
-        if (report && report.is_paid && (report.status === 'draft' || report.status === 'failed')) {
+        if (!reportId) return;
+        const fetchLinkedDeepDives = async () => {
+            const { data } = await supabase
+                .from('product_analyses')
+                .select('id, status, is_paid, created_at, product_input_data')
+                .eq('business_report_id', reportId)
+                .order('created_at', { ascending: false });
+            if (data) setLinkedDeepDives(data);
+        };
+        const fetchLinkedAudits = async () => {
+            const { data } = await supabase
+                .from('digital_audits')
+                .select('id, status, is_paid, created_at, audit_input')
+                .eq('business_report_id', reportId)
+                .order('created_at', { ascending: false });
+            if (data) setLinkedAudits(data);
+        };
+        fetchLinkedDeepDives();
+        fetchLinkedAudits();
+    }, [reportId]);
+
+    useEffect(() => {
+        if (report && (report.is_paid || report.is_voluntary_payment) && (report.status === 'draft' || report.status === 'failed')) {
             runAnalysis(report);
         }
     }, [report]);
@@ -86,9 +119,19 @@ export default function ReportView({ lang }: ReportViewProps) {
             console.error('Analysis failed:', err);
             setError(err.message || 'Error al generar el análisis de IA.');
 
+            // Capture rich error details for admin debugging
+            const errorInfo = [
+                `Error: ${err.message || 'Unknown'}`,
+                `Type: ${err.name || 'Error'}`,
+                `Browser: ${navigator.userAgent?.slice(0, 120)}`,
+                `Time: ${new Date().toISOString()}`,
+                `Online: ${navigator.onLine}`,
+                err.stack ? `Stack: ${err.stack.split('\n').slice(0, 3).join(' → ')}` : '',
+            ].filter(Boolean).join(' | ');
+
             await supabase
                 .from('business_reports')
-                .update({ status: 'failed' })
+                .update({ status: 'failed', error_details: errorInfo })
                 .eq('id', currentReport.id);
         } finally {
             setAnalyzing(false);
@@ -205,20 +248,166 @@ export default function ReportView({ lang }: ReportViewProps) {
                                 ) : (
                                     <Download size={14} />
                                 )}
-                                {downloading ? 'Generando...' : 'Descargar PDF'}
+                                <span className="hidden sm:inline">{downloading ? 'Generando...' : 'PDF'}</span>
+                            </button>
+                            <button
+                                onClick={() => setServicesModalOpen(true)}
+                                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-violet-600 to-emerald-600 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"
+                                title="Análisis Avanzados"
+                            >
+                                <Zap size={14} />
+                                <span className="hidden sm:inline">Más Análisis</span>
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setProfundizarSection(null);
+                                    setProfundizarOpen(true);
+                                }}
+                                className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-sm font-semibold hover:bg-amber-100 transition"
+                            >
+                                <Sparkles size={14} />
+                                <span className="hidden sm:inline">{lang === 'es' ? 'Profundizar' : 'Deep Dive AI'}</span>
                             </button>
                         </div>
                     </div>
                 </div>
 
+                {/* Enrichment Data Cards (Apify real data) */}
+                <EnrichmentCards
+                    data={((report.analysis_result as any)?.result || report.analysis_result)?._enrichmentData}
+                    type="strategic"
+                />
+
                 <Dashboard
                     data={((report.analysis_result as any)?.result || report.analysis_result) as StrategicAnalysis}
                     lang={lang}
                     onReset={() => navigate('/dashboard')}
+                    onProfundizar={(title, content) => {
+                        setProfundizarSection({ title, content });
+                        setProfundizarOpen(true);
+                    }}
                 />
 
-                {/* --- NUEVO BLOQUE: Solo visible si es un pago voluntario --- */}
-                {report.is_voluntary_payment && (
+                {/* ProfundizarPanel — now driven by per-card buttons too */}
+                <ProfundizarPanel
+                    isOpen={profundizarOpen}
+                    onClose={() => setProfundizarOpen(false)}
+                    sectionTitle={profundizarSection?.title || (lang === 'es' ? 'Informe de Negocio Completo' : 'Full Business Report')}
+                    sectionContent={profundizarSection?.content || (() => {
+                        const d = ((report.analysis_result as any)?.result || report.analysis_result) as StrategicAnalysis;
+                        return `Market: ${d.marketInsights?.industry || ''}. Personas: ${d.demandMap?.map(p => p.name).join(', ') || ''}. Competitors: ${d.competitors?.map((c: any) => c.name).join(', ') || ''}. Blue Ocean: ${d.blueOcean?.diagnosis || ''}. Actions: ${d.actionPlan?.slice(0, 3).join('. ') || ''}`;
+                    })()}
+                    reportContext={`Negocio: ${report.business_name || ''}. Industria: ${((report.analysis_result as any)?.result || report.analysis_result)?.marketInsights?.industry || ''}`}
+                    reportId={reportId || ''}
+                    reportType="business"
+                    lang={lang}
+                />
+
+                {/* Linked Analyses Section */}
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 my-12 print:hidden">
+                    <div className="bg-gradient-to-br from-violet-50 via-indigo-50 to-emerald-50 rounded-3xl p-8 sm:p-10 border border-indigo-100">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+                                    <Sparkles size={22} className="text-indigo-600" />
+                                    {lang === 'es' ? 'Análisis Avanzados' : 'Advanced Analyses'}
+                                </h3>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    {lang === 'es' ? 'Deep Dives, Auditorías Digitales y más para este negocio' : 'Deep Dives, Digital Audits and more for this business'}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setServicesModalOpen(true)}
+                                className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-violet-600 to-emerald-600 text-white rounded-xl font-bold text-sm hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+                            >
+                                <Zap size={16} className="text-yellow-300" />
+                                {lang === 'es' ? 'Nuevo Análisis' : 'New Analysis'}
+                            </button>
+                        </div>
+
+                        {(linkedDeepDives.length > 0 || linkedAudits.length > 0) ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {linkedDeepDives.map(dd => {
+                                    const productName = (dd.product_input_data as any)?.productName || 'Sin nombre';
+                                    const isCompleted = dd.status === 'completed';
+                                    const date = new Date(dd.created_at).toLocaleDateString(lang === 'es' ? 'es-AR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+                                    return (
+                                        <button
+                                            key={dd.id}
+                                            onClick={() => navigate(`/deep-dive/report/${dd.id}`)}
+                                            className="bg-white rounded-2xl p-5 border border-slate-200 text-left hover:shadow-lg hover:border-violet-300 transition-all group"
+                                        >
+                                            <div className="flex items-start justify-between mb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">Deep Dive</span>
+                                                    <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${isCompleted ? 'bg-emerald-50 text-emerald-700' :
+                                                        dd.status === 'analyzing' ? 'bg-amber-50 text-amber-700' :
+                                                            'bg-slate-100 text-slate-500'
+                                                        }`}>
+                                                        {isCompleted ? '✓' : dd.status === 'analyzing' ? '⏳' : dd.status}
+                                                    </span>
+                                                </div>
+                                                <ArrowRight size={16} className="text-slate-300 group-hover:text-violet-500 transition" />
+                                            </div>
+                                            <h4 className="font-bold text-slate-900 text-lg leading-tight mb-2 group-hover:text-violet-700 transition">{productName}</h4>
+                                            <span className="text-xs text-slate-400">{date}</span>
+                                        </button>
+                                    );
+                                })}
+                                {linkedAudits.map(audit => {
+                                    const isCompleted = audit.status === 'completed';
+                                    const date = new Date(audit.created_at).toLocaleDateString(lang === 'es' ? 'es-AR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+                                    return (
+                                        <button
+                                            key={audit.id}
+                                            onClick={() => navigate(`/digital-audit/report/${audit.id}`)}
+                                            className="bg-white rounded-2xl p-5 border border-slate-200 text-left hover:shadow-lg hover:border-emerald-300 transition-all group"
+                                        >
+                                            <div className="flex items-start justify-between mb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Auditoría Digital</span>
+                                                    <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${isCompleted ? 'bg-emerald-50 text-emerald-700' :
+                                                        audit.status === 'analyzing' ? 'bg-amber-50 text-amber-700' :
+                                                            'bg-slate-100 text-slate-500'
+                                                        }`}>
+                                                        {isCompleted ? '✓' : audit.status === 'analyzing' ? '⏳' : audit.status}
+                                                    </span>
+                                                </div>
+                                                <ArrowRight size={16} className="text-slate-300 group-hover:text-emerald-500 transition" />
+                                            </div>
+                                            <h4 className="font-bold text-slate-900 text-lg leading-tight mb-2 group-hover:text-emerald-700 transition">
+                                                <Globe size={16} className="inline text-emerald-500 mr-1" />
+                                                Auditoría Digital
+                                            </h4>
+                                            <span className="text-xs text-slate-400">{date}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="text-center py-8">
+                                <p className="text-slate-400 text-sm">
+                                    {lang === 'es'
+                                        ? 'Todavía no creaste ningún análisis avanzado para este negocio. ¡Hacé clic en "Nuevo Análisis" para empezar!'
+                                        : 'No advanced analyses yet. Click "New Analysis" to start!'}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Feedback trigger */}
+                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 my-8 print:hidden">
+                    <FeedbackModal
+                        reportId={reportId}
+                        reportType="business"
+                        userId={user!.id}
+                        lang={lang}
+                    />
+                </div>
+
+                {/* --- NUEVO BLOQUE: Solo visible si es un pago voluntario Y aún no pagó --- */}
+                {report.is_voluntary_payment && report.payment_status !== 'paid' && (
                     <div className="max-w-4xl mx-auto my-16 print:hidden">
                         <div className="relative bg-gradient-to-br from-indigo-900 via-violet-900 to-fuchsia-900 rounded-[2.5rem] p-10 sm:p-14 text-center shadow-2xl overflow-hidden isolation-auto">
                             {/* Decorative background elements */}
@@ -256,6 +445,15 @@ export default function ReportView({ lang }: ReportViewProps) {
                         </div>
                     </div>
                 )}
+
+                <GlossaryModal lang={lang} />
+
+                <ServicesModal
+                    isOpen={servicesModalOpen}
+                    onClose={() => setServicesModalOpen(false)}
+                    reportId={reportId || ''}
+                    lang={lang}
+                />
             </div>
         );
     }

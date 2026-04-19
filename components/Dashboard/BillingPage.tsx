@@ -95,22 +95,6 @@ export default function BillingPage() {
                 <p className="text-slate-500 mt-1">Historial de pagos y facturas</p>
             </div>
 
-            {/* Pricing Info */}
-            <div className="bg-gradient-to-r from-indigo-50 to-violet-50 rounded-2xl border border-indigo-100 p-6 mb-8">
-                <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <CreditCard size={24} className="text-indigo-600" />
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-slate-900 mb-1">Precios</h3>
-                        <div className="space-y-1 text-sm text-slate-600">
-                            <p><span className="font-semibold text-indigo-700">$5 USD</span> por análisis estratégico de empresa</p>
-                            <p><span className="font-semibold text-indigo-700">$5 USD</span> por análisis de producto <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold ml-1">Próximamente</span></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {/* Payments List */}
             {payments.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">

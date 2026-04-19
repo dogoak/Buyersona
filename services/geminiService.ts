@@ -1,11 +1,7 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { callGeminiProxy } from './geminiProxyClient';
 import { BusinessInput, StrategicAnalysis, Language } from "../types";
-
-const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
-if (!apiKey) {
-    console.warn('Gemini API key not set. AI analysis features will not work.');
-}
-const ai = new GoogleGenAI({ apiKey: apiKey || 'placeholder' });
+import { scrapeGoogleTrendsApify, GoogleTrendsResult, scrapeGoogleMapsCompetitors, MapsCompetitorResult, scrapeGoogleSerpForAnalysis, SerpCompetitorResult } from './apifyClient';
 
 export const analyzeWebsite = async (url: string, lang: Language): Promise<{ result: string, costUsd: number }> => {
     const modelName = 'gemini-2.5-flash'; // Faster model for initial scrape
@@ -29,12 +25,12 @@ export const analyzeWebsite = async (url: string, lang: Language): Promise<{ res
            Respond ONLY with the JSON.`;
 
     try {
-        const response = await ai.models.generateContent({
+        const response = await callGeminiProxy({
+            action: 'analyze_website',
             model: modelName,
             contents: prompt,
             config: {
                 tools: [{ googleSearch: {} }],
-                // responseMimeType: "application/json" // Removed as it conflicts with tools in this model version
             }
         });
 
@@ -62,10 +58,87 @@ export const analyzeWebsite = async (url: string, lang: Language): Promise<{ res
 };
 
 export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language): Promise<{ result: StrategicAnalysis, costUsd: number }> => {
-    const modelName = 'gemini-3-pro-preview';
-    // Pricing for gemini-3-pro-preview (approx fallback to general Pro prices): Input = $1.25 / 1M, Output = $5.00 / 1M
+    const modelName = 'gemini-3.1-pro-preview';
+    // Pricing for gemini-3.1-pro-preview (approx fallback to general Pro prices): Input = $1.25 / 1M, Output = $5.00 / 1M
     const inputTokenPriceUsd = 1.25 / 1000000;
     const outputTokenPriceUsd = 5.00 / 1000000;
+
+    // ── Scrape Google Trends (fail-silent) ──
+    let trendsContext = '';
+    let _rawTrendsData: any[] = [];
+    try {
+        const trendsTerms = [input.productName, input.businessName].filter(Boolean).slice(0, 2);
+        if (trendsTerms.length > 0) {
+            console.log('[Strategic] Scraping Google Trends for:', trendsTerms);
+            _rawTrendsData = await scrapeGoogleTrendsApify(trendsTerms);
+            if (_rawTrendsData.length > 0) {
+                trendsContext = `
+    ═══════════════════════════════════════════
+    DATOS REALES DE GOOGLE TRENDS (últimos 12 meses, Argentina):
+    ═══════════════════════════════════════════
+    ${_rawTrendsData.map(t => `Término: "${t.term}"
+    - Tendencia: ${t.trendSummary === 'rising' ? '📈 CRECIENTE' : t.trendSummary === 'declining' ? '📉 DECRECIENTE' : '➡️ ESTABLE'}
+    - Pico de interés: ${t.peakValue}/100 | Valor actual: ${t.currentValue}/100
+    - Búsquedas relacionadas: ${t.relatedQueries.join(', ') || 'N/A'}`).join('\n    ')}
+    
+    USÁLOS para enriquecer la sección marketInsights.trends con datos REALES.
+    Si la tendencia es decreciente, MENCIONALO como un riesgo.
+    Si hay búsquedas relacionadas interesantes, USALAS para sugerir oportunidades.
+    `;
+            }
+        }
+    } catch (e) {
+        console.error('[Strategic] Google Trends failed (non-blocking):', e);
+    }
+
+    // ── Scrape Google Maps for real competitors + SERP (fail-silent, parallel) ──
+    let competitorContext = '';
+    let _rawMapsData: any[] = [];
+    let _rawSerpData: any[] = [];
+    try {
+        const businessTypes = input.businessType || [];
+        const region = input.targetRegion || 'Argentina';
+        const mapsQuery = `${businessTypes[0] || input.productName || 'negocio'} ${region}`;
+        const serpQueries = [
+            `${input.productName || input.businessName} ${region}`,
+            `comprar ${input.productName || businessTypes[0] || ''} online`,
+        ].filter(q => q.trim().length > 5);
+
+        console.log('[Strategic] Scraping Maps/SERP for:', mapsQuery, serpQueries);
+        [_rawMapsData, _rawSerpData] = await Promise.all([
+            scrapeGoogleMapsCompetitors(mapsQuery),
+            scrapeGoogleSerpForAnalysis(serpQueries),
+        ]);
+
+        const parts: string[] = [];
+
+        if (_rawMapsData.length > 0) {
+            parts.push(`
+    COMPETIDORES REALES EN GOOGLE MAPS (búsqueda: "${mapsQuery}"):
+    ${_rawMapsData.map((c, i) => `${i + 1}. "${c.name}" — ⭐ ${c.rating}/5 (${c.totalReviews} reseñas) | ${c.category} | ${c.address}${c.website ? ` | Web: ${c.website}` : ''}`).join('\n    ')}`);
+        }
+
+        if (_rawSerpData.length > 0) {
+            parts.push(`
+    QUIÉN DOMINA GOOGLE PARA ESTE RUBRO:
+    ${_rawSerpData.map(s => `Búsqueda "${s.query}":\n    ${s.topResults.map(r => `    #${r.position}: ${r.title} (${r.url})`).join('\n    ')}`).join('\n    ')}`);
+        }
+
+        if (parts.length > 0) {
+            competitorContext = `
+    ═══════════════════════════════════════════
+    DATOS REALES DE COMPETENCIA (VERIFICADOS VÍA GOOGLE):
+    ═══════════════════════════════════════════
+    ${parts.join('\n')}
+    
+    ⚠️ USÁ ESTOS COMPETIDORES REALES (no inventes).
+    En la sección 'competitors', PRIORIZÁ estos negocios verificados.
+    Incluí su rating real y cantidad de reseñas en el análisis.
+    `;
+        }
+    } catch (e) {
+        console.error('[Strategic] Competitor scraping failed (non-blocking):', e);
+    }
 
     const languageInstruction = lang === 'es'
         ? "IMPORTANT: The output JSON content MUST be in SPANISH."
@@ -152,6 +225,8 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
     === ADDITIONAL CONTEXT FROM USER ===
     ${input.additionalNotes}
     ` : ''}
+    ${trendsContext}
+    ${competitorContext}
 
     Your Goal:
     1. **Executive Summary:** Write a warm, human, professional summary. Avoid robotic language. Speak directly to the business owner.
@@ -210,11 +285,12 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
         });
     }
 
-    const response = await ai.models.generateContent({
+    const response = await callGeminiProxy({
+        action: 'analyze_business',
         model: modelName,
         contents: contents,
         config: {
-            tools: [{ googleSearch: {} }], // Enable Search for Competitors/Social
+            tools: [{ googleSearch: {} }],
             thinkingConfig: { thinkingBudget: 16000 },
             responseMimeType: "application/json",
             responseSchema: {
@@ -419,10 +495,17 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
     try {
         const parsedResult = JSON.parse(response.text) as StrategicAnalysis;
 
+        // Attach enrichment data so the UI can render visual cards
+        (parsedResult as any)._enrichmentData = {
+            trends: _rawTrendsData.length > 0 ? _rawTrendsData : null,
+            mapsCompetitors: _rawMapsData.length > 0 ? _rawMapsData : null,
+            serpResults: _rawSerpData.length > 0 ? _rawSerpData : null,
+        };
+
         let costUsd = 0;
         if (response.usageMetadata) {
-            costUsd = (response.usageMetadata.promptTokenCount * inputTokenPriceUsd) +
-                (response.usageMetadata.candidatesTokenCount * outputTokenPriceUsd);
+            costUsd = ((response.usageMetadata.promptTokenCount || 0) * inputTokenPriceUsd) +
+                ((response.usageMetadata.candidatesTokenCount || 0) * outputTokenPriceUsd);
         } else {
             // Fallback token estimation (approx 4 chars per token)
             const estimatedPromptTokens = JSON.stringify(input).length / 4;

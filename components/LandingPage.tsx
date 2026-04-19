@@ -1,9 +1,10 @@
 import React from 'react';
 import { translations } from '../utils/translations';
 import { Language } from '../types';
-import { ArrowRight, Globe, Target, MapPin, BarChart3, TrendingUp, Clock, Waves, ClipboardList, Activity, CheckCircle } from 'lucide-react';
+import { ArrowRight, Globe, Target, MapPin, BarChart3, TrendingUp, Clock, Waves, ClipboardList, Activity, CheckCircle, Sparkles, Users, DollarSign, FileText, Package, Truck, MonitorSmartphone } from 'lucide-react';
 
 import { FullLogo, Isotype } from './BrandAssets';
+import { useSEO } from '../hooks/useSEO';
 
 import { supabase } from '../services/supabaseClient';
 
@@ -16,17 +17,29 @@ interface LandingPageProps {
 
 export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin, onRegister }) => {
   const t = translations[lang].hero;
+  useSEO({
+    title: 'Buyersona - Strategic AI Reports & Audits',
+    description: lang === 'es' 
+      ? 'Descubrí a tu cliente ideal, la mejor forma de captarlo y analiza a tu competencia con reportes impulsados por IA.'
+      : 'Discover your ideal client, the best acquisition channels and analyze competitors with AI-powered reporting.'
+  });
   const [reportPrice, setReportPrice] = React.useState<number | null>(null);
+  const [deepDivePrice, setDeepDivePrice] = React.useState<number | null>(null);
+  const [auditPrice, setAuditPrice] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     const fetchPrice = async () => {
       try {
         const { data, error } = await supabase
           .from('system_settings')
-          .select('report_price_ars')
+          .select('report_price_ars, deep_dive_price_ars, digital_audit_price_ars')
           .eq('id', 1)
           .single();
-        if (data && !error) setReportPrice(data.report_price_ars);
+        if (data && !error) {
+          setReportPrice(data.report_price_ars);
+          setDeepDivePrice(data.deep_dive_price_ars || Math.round((data.report_price_ars || 25000) / 2));
+          setAuditPrice(data.digital_audit_price_ars || Math.round((data.report_price_ars || 25000) / 2));
+        }
       } catch (err) {
         console.error('Failed to fetch pricing:', err);
       }
@@ -168,12 +181,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
           </div>
 
           <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-xl shadow-slate-200/50 hover:bg-white transition duration-300 group relative overflow-hidden">
-            <div className="absolute top-0 right-0 bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-bl-xl">BETA</div>
+            <div className="absolute top-0 right-0 bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-bl-xl">NEW</div>
             <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 mb-6 group-hover:scale-110 transition-transform duration-300">
               <Target size={28} />
             </div>
             <h3 className="font-bold text-xl text-slate-900 mb-2">Product Deep Dive</h3>
-            <p className="text-slate-500 leading-relaxed">Analiza productos específicos usando el contexto de tu negocio.</p>
+            <p className="text-slate-500 leading-relaxed">Analiza productos específicos a partir del contexto de tu análisis de negocio.</p>
           </div>
         </div>
       </div>
@@ -195,7 +208,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-3 md:grid-cols-2 gap-6 max-w-6xl mx-auto">
             {/* Business Analysis */}
             <div className="relative bg-gradient-to-br from-white to-indigo-50/40 rounded-3xl border-2 border-indigo-200 p-8 text-center shadow-lg shadow-indigo-100/50">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-bold px-4 py-1 rounded-full">
@@ -240,9 +253,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
             </div>
 
             {/* Product Deep Dive */}
-            <div className="relative bg-white rounded-3xl border border-slate-200 p-8 text-center opacity-80">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-400 text-white text-xs font-bold px-4 py-1 rounded-full">
-                {lang === 'es' ? 'PRÓXIMAMENTE' : 'COMING SOON'}
+            <div className="relative bg-gradient-to-br from-white to-violet-50/40 rounded-3xl border-2 border-violet-200 p-8 text-center shadow-lg shadow-violet-100/50">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-violet-600 text-white text-xs font-bold px-4 py-1 rounded-full">
+                {lang === 'es' ? 'DISPONIBLE' : 'AVAILABLE'}
               </div>
               <div className="w-16 h-16 bg-violet-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
                 <TrendingUp size={30} className="text-violet-600" />
@@ -250,14 +263,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
               <h3 className="text-xl font-extrabold text-slate-900 mb-2">Product Deep Dive</h3>
               <div className="flex items-baseline justify-center gap-1 my-4">
                 <span className="text-5xl font-extrabold text-slate-900">
-                  {reportPrice ? `$${Math.round(reportPrice / 2).toLocaleString('es-AR')}` : '...'}
+                  {deepDivePrice ? `$${deepDivePrice.toLocaleString('es-AR')}` : '...'}
                 </span>
                 <span className="text-xl font-bold text-slate-400">ARS</span>
               </div>
               <p className="text-sm text-slate-500 mb-6">
                 {lang === 'es' ? 'Por análisis de producto' : 'Per product analysis'}
               </p>
-              <ul className="text-left space-y-3 mb-8">
+              <ul className="text-left space-y-3 mb-6">
                 {[
                   lang === 'es' ? 'Basado en tu análisis de empresa' : 'Based on your business analysis',
                   lang === 'es' ? 'Posicionamiento de producto' : 'Product positioning',
@@ -272,13 +285,165 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
                   </li>
                 ))}
               </ul>
+              <p className="text-xs text-slate-400 mb-4 italic">
+                {lang === 'es'
+                  ? '* Requiere un Análisis Estratégico previo para conocer tu negocio.'
+                  : '* Requires a prior Strategic Analysis to understand your business.'}
+              </p>
               <button
-                disabled
-                className="w-full bg-slate-100 text-slate-400 py-3.5 rounded-2xl font-bold text-lg cursor-not-allowed"
+                onClick={onRegister}
+                className="w-full bg-gradient-to-r from-violet-600 to-purple-600 text-white py-3.5 rounded-2xl font-bold text-lg hover:shadow-xl hover:shadow-violet-200 transition-all transform hover:-translate-y-0.5"
               >
-                {lang === 'es' ? 'Próximamente' : 'Coming Soon'}
+                {lang === 'es' ? 'Comenzar ahora' : 'Start now'}
               </button>
             </div>
+
+            {/* Digital Audit */}
+            <div className="relative bg-gradient-to-br from-white to-emerald-50/40 rounded-3xl border-2 border-emerald-200 p-8 text-center shadow-lg shadow-emerald-100/50">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-xs font-bold px-4 py-1 rounded-full">
+                {lang === 'es' ? 'NUEVO' : 'NEW'}
+              </div>
+              <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <MonitorSmartphone size={30} className="text-emerald-600" />
+              </div>
+              <h3 className="text-xl font-extrabold text-slate-900 mb-2">
+                {lang === 'es' ? 'Auditoría Digital' : 'Digital Audit'}
+              </h3>
+              <div className="flex items-baseline justify-center gap-1 my-4">
+                <span className="text-5xl font-extrabold text-slate-900">
+                  {auditPrice ? `$${auditPrice.toLocaleString('es-AR')}` : '...'}
+                </span>
+                <span className="text-xl font-bold text-slate-400">ARS</span>
+              </div>
+              <p className="text-sm text-slate-500 mb-6">
+                {lang === 'es' ? 'Por auditoría de ecosistema' : 'Per ecosystem audit'}
+              </p>
+              <ul className="text-left space-y-3 mb-6">
+                {[
+                  lang === 'es' ? 'Posicionamiento orgánico en redes' : 'Organic social media positioning',
+                  lang === 'es' ? 'Huella y presencia digital general' : 'Overall digital footprint & presence',
+                  lang === 'es' ? 'Percepción de marca por los usuarios' : 'Brand perception by end users',
+                  lang === 'es' ? 'Rendimiento de los canales de venta' : 'Sales channels performance',
+                  lang === 'es' ? 'Comparativa táctica vs Competencia' : 'Tactical competitor benchmarking',
+                  lang === 'es' ? 'Plan de mejora y Quick Wins' : 'Improvement plan & Quick Wins',
+                ].map((item, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-sm text-slate-700">
+                    <CheckCircle size={16} className="text-emerald-500 flex-shrink-0" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-slate-400 mb-4 italic">
+                {lang === 'es'
+                  ? '* Requiere un Análisis Estratégico previo.'
+                  : '* Requires a prior Strategic Analysis.'}
+              </p>
+              <button
+                onClick={onRegister}
+                className="w-full bg-gradient-to-r from-emerald-600 to-green-600 text-white py-3.5 rounded-2xl font-bold text-lg hover:shadow-xl hover:shadow-emerald-200 transition-all transform hover:-translate-y-0.5"
+              >
+                {lang === 'es' ? 'Comenzar ahora' : 'Start now'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── UPCOMING MODULES / LABORATORIO ─── */}
+      <div className="relative py-20 overflow-hidden">
+        {/* Dark gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-950 to-violet-950" />
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(120,119,198,0.3), transparent 50%), radial-gradient(circle at 80% 20%, rgba(74,222,128,0.2), transparent 50%)' }} />
+
+        <div className="relative max-w-5xl mx-auto px-6">
+          <div className="text-center mb-14">
+            <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 px-4 py-1.5 rounded-full mb-6">
+              <Sparkles size={14} className="text-yellow-400" />
+              <span className="text-xs font-bold text-white/80 uppercase tracking-widest">
+                {lang === 'es' ? 'Próximamente' : 'Coming Soon'}
+              </span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mb-4">
+              {lang === 'es' ? 'Laboratorio de Inteligencia' : 'Intelligence Lab'}
+            </h2>
+            <p className="text-lg text-slate-400 max-w-2xl mx-auto">
+              {lang === 'es'
+                ? 'Deep Dives especializados para cada desafío de tu negocio. Cada módulo es un análisis profundo impulsado por IA.'
+                : 'Specialized Deep Dives for every business challenge. Each module is a deep AI-powered analysis.'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[
+              {
+                icon: Globe,
+                gradient: 'from-emerald-500 to-teal-600',
+                bg: 'bg-emerald-500/10 border-emerald-500/20',
+                name: lang === 'es' ? 'Expansión a Nuevos Mercados' : 'Market Expansion',
+                desc: lang === 'es'
+                  ? 'Analizá la viabilidad de expandir tu negocio a nuevas regiones, países o continentes.'
+                  : 'Analyze the viability of expanding your business to new regions, countries or continents.',
+              },
+              {
+                icon: DollarSign,
+                gradient: 'from-amber-500 to-orange-600',
+                bg: 'bg-amber-500/10 border-amber-500/20',
+                name: lang === 'es' ? 'Estrategia de Precios' : 'Pricing Strategy',
+                desc: lang === 'es'
+                  ? 'Descubrí tu precio óptimo con análisis de elasticidad, competencia y posicionamiento.'
+                  : 'Discover your optimal price with elasticity, competition, and positioning analysis.',
+              },
+              {
+                icon: FileText,
+                gradient: 'from-pink-500 to-rose-600',
+                bg: 'bg-pink-500/10 border-pink-500/20',
+                name: lang === 'es' ? 'Plan de Contenidos' : 'Content Plan',
+                desc: lang === 'es'
+                  ? 'Qué publicar, dónde, cada cuánto y con qué tono. Basado en tus buyer personas.'
+                  : 'What to publish, where, how often and in what tone. Based on your buyer personas.',
+              },
+              {
+                icon: Users,
+                gradient: 'from-blue-500 to-indigo-600',
+                bg: 'bg-blue-500/10 border-blue-500/20',
+                name: lang === 'es' ? 'Perfil de Equipo Ideal' : 'Ideal Team Profile',
+                desc: lang === 'es'
+                  ? 'Descubrí qué perfiles necesitás contratar para escalar tu operación.'
+                  : 'Discover which profiles you need to hire to scale your operation.',
+              },
+              {
+                icon: Package,
+                gradient: 'from-violet-500 to-purple-600',
+                bg: 'bg-violet-500/10 border-violet-500/20',
+                name: lang === 'es' ? 'Oportunidad de Nuevos Productos' : 'New Product Opportunities',
+                desc: lang === 'es'
+                  ? 'Identificá oportunidades de lanzamiento basadas en tu audiencia y mercado.'
+                  : 'Identify launch opportunities based on your audience and market.',
+              },
+              {
+                icon: Truck,
+                gradient: 'from-cyan-500 to-sky-600',
+                bg: 'bg-cyan-500/10 border-cyan-500/20',
+                name: lang === 'es' ? 'Red de Proveedores' : 'Supplier Network',
+                desc: lang === 'es'
+                  ? 'Encontrá proveedores estratégicos y optimizá tu cadena de valor.'
+                  : 'Find strategic suppliers and optimize your value chain.',
+              },
+            ].map((module, i) => (
+              <div
+                key={i}
+                className={`group relative ${module.bg} border rounded-2xl p-6 backdrop-blur-sm hover:scale-[1.03] transition-all duration-300 cursor-default`}
+              >
+                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${module.gradient} flex items-center justify-center mb-4 shadow-lg`}>
+                  <module.icon size={20} className="text-white" />
+                </div>
+                <h3 className="text-sm font-extrabold text-white mb-2 tracking-tight">{module.name}</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">{module.desc}</p>
+                <div className="absolute top-4 right-4">
+                  <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Soon</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -292,6 +457,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
           <span className="text-slate-200">·</span>
           <a href="/terms" className="text-slate-400 hover:text-indigo-600 text-sm font-medium transition">
             {lang === 'es' ? 'Términos' : 'Terms'}
+          </a>
+          <span className="text-slate-200">·</span>
+          <a href="mailto:soporte@buyersona.com" className="text-slate-400 hover:text-indigo-600 text-sm font-medium transition">
+            {lang === 'es' ? 'Soporte' : 'Support'}
           </a>
         </div>
         <p className="text-slate-400 text-sm font-medium">© 2026 BUYERSONA. {t.footer}.</p>
