@@ -280,29 +280,33 @@ export default function ReportsList() {
                 </button>
 
                 <button
-                    onClick={() => navigate('/onboarding')}
-                    className="group bg-white rounded-2xl p-6 border border-slate-200 text-left hover:border-indigo-200 hover:shadow-md transition-all transform hover:-translate-y-0.5"
+                    onClick={() => {
+                        const firstBiz = reports.find(r => r.type === 'business' && r.status === 'completed');
+                        if (firstBiz) { navigate(`/deep-dive/new/${firstBiz.id}`); }
+                        else navigate('/onboarding');
+                    }}
+                    className="group bg-white rounded-2xl p-6 border border-slate-200 text-left hover:border-violet-200 hover:shadow-md transition-all transform hover:-translate-y-0.5"
                 >
-                    <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-                        <Target size={24} className="text-emerald-600" />
+                    <div className="w-12 h-12 bg-violet-50 rounded-xl flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                        <Search size={24} className="text-violet-600" />
                     </div>
-                    <h3 className="font-bold text-slate-900 mb-1">Buyer Personas</h3>
-                    <p className="text-slate-500 text-sm">Incluido en cada análisis: perfiles detallados de tus compradores ideales</p>
+                    <h3 className="font-bold text-slate-900 mb-1">Deep Dive de Producto</h3>
+                    <p className="text-slate-500 text-sm">Análisis táctico, competidores y plan de ventas (requiere Estrategia).</p>
                 </button>
 
                 <button
                     onClick={() => {
                         const firstBiz = reports.find(r => r.type === 'business' && r.status === 'completed');
-                        if (firstBiz) { setServicesModalReportId(firstBiz.id); setServicesModalOpen(true); }
+                        if (firstBiz) { navigate(`/digital-audit/new/${firstBiz.id}`); }
                         else navigate('/onboarding');
                     }}
                     className="group bg-white rounded-2xl p-6 border border-slate-200 text-left hover:border-emerald-200 hover:shadow-md transition-all transform hover:-translate-y-0.5"
                 >
-                    <div className="w-12 h-12 bg-gradient-to-br from-violet-50 to-emerald-50 rounded-xl flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-                        <Zap size={24} className="text-indigo-600" />
+                    <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                        <Globe size={24} className="text-emerald-600" />
                     </div>
-                    <h3 className="font-bold text-slate-900 mb-1">Análisis Avanzados</h3>
-                    <p className="text-slate-500 text-sm">Deep Dives, Auditoría Digital y más. Elegí el análisis ideal para tu negocio.</p>
+                    <h3 className="font-bold text-slate-900 mb-1">Auditoría Digital</h3>
+                    <p className="text-slate-500 text-sm">Diagnóstico web, SEO y redes de tu marca (requiere Estrategia).</p>
                 </button>
             </div>
 
