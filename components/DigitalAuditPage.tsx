@@ -5,7 +5,6 @@ import { supabase } from '../services/supabaseClient';
 import DigitalAuditForm from './DigitalAuditForm';
 import { DigitalAuditInput, StrategicAnalysis, Language } from '../types';
 import { Loader2 } from 'lucide-react';
-import AppHeader from './AppHeader';
 
 interface DigitalAuditPageProps {
     lang: Language;

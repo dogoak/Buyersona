@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Language } from '../types';
 import {
     LogOut, User, FileText, Settings, CreditCard, ChevronDown,
-    Globe, BarChart3, Plus, Shield
+    Globe, BarChart3, Plus, Shield, Mail
 } from 'lucide-react';
 import { Isotype, FullLogo } from './BrandAssets';
 import { supabase } from '../services/supabaseClient';
@@ -53,7 +53,7 @@ export default function AppHeader({ lang, setLang }: AppHeaderProps) {
     const handleSignOut = async () => {
         try {
             await signOut();
-            navigate('/');
+            window.location.href = '/';
         } catch (error) {
             console.error('Error signing out:', error);
         }
@@ -64,6 +64,7 @@ export default function AppHeader({ lang, setLang }: AppHeaderProps) {
         { label: 'Nuevo Análisis', icon: Plus, path: '/onboarding' },
         { label: 'Facturación', icon: CreditCard, path: '/dashboard/billing' },
         { label: 'Configuración', icon: Settings, path: '/dashboard/settings' },
+        { label: 'Soporte', icon: Mail, action: () => window.location.href = 'mailto:soporte@buyersona.com' },
     ];
 
     if (isAdmin) {
@@ -134,12 +135,16 @@ export default function AppHeader({ lang, setLang }: AppHeaderProps) {
                                 <div className="py-1">
                                     {menuItems.map((item) => {
                                         const Icon = item.icon;
-                                        const isActive = location.pathname === item.path;
+                                        const isActive = item.path && location.pathname === item.path;
                                         return (
                                             <button
-                                                key={item.path}
+                                                key={item.label}
                                                 onClick={() => {
-                                                    navigate(item.path);
+                                                    if (item.action) {
+                                                        item.action();
+                                                    } else if (item.path) {
+                                                        navigate(item.path);
+                                                    }
                                                     setDropdownOpen(false);
                                                 }}
                                                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive

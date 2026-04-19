@@ -5,7 +5,6 @@ import { supabase } from '../services/supabaseClient';
 import DeepDiveForm from './DeepDiveForm';
 import { DeepDiveInput, StrategicAnalysis, Language } from '../types';
 import { Loader2 } from 'lucide-react';
-import AppHeader from './AppHeader';
 
 interface DeepDivePageProps {
     lang: Language;
@@ -106,7 +105,6 @@ export default function DeepDivePage({ lang, setLang }: DeepDivePageProps) {
     if (loadingParent) {
         return (
             <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-                <AppHeader lang={lang} setLang={setLang} />
                 <div className="flex-1 flex flex-col items-center justify-center">
                     <Loader2 className="animate-spin text-violet-600 mb-4" size={40} />
                     <p className="text-lg font-bold text-slate-700">
@@ -120,7 +118,6 @@ export default function DeepDivePage({ lang, setLang }: DeepDivePageProps) {
     if (error) {
         return (
             <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-                <AppHeader lang={lang} setLang={setLang} />
                 <div className="flex-1 flex flex-col items-center justify-center px-4">
                     <div className="bg-red-50 border border-red-200 rounded-2xl p-8 max-w-md text-center">
                         <h2 className="text-xl font-bold text-red-700 mb-2">Error</h2>
@@ -139,7 +136,6 @@ export default function DeepDivePage({ lang, setLang }: DeepDivePageProps) {
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-            <AppHeader lang={lang} setLang={setLang} />
             <div className="flex-1 overflow-y-auto pt-4">
                 <DeepDiveForm
                     lang={lang}
