@@ -25,6 +25,7 @@ import AppHeader from './components/AppHeader';
 import AdminRoute from './components/AdminRoute';
 import SuperAdminDashboard from './components/SuperAdmin/SuperAdminDashboard';
 import AnalysisLoader from './components/AnalysisLoader';
+import ReloadPrompt from './components/ReloadPrompt';
 import { Language, BusinessInput, StrategicAnalysis } from './types';
 import { analyzeBusinessGrowth } from './services/geminiService';
 import { supabase } from './services/supabaseClient';
@@ -389,6 +390,7 @@ function App() {
           {/* Landing Page */}
           <Route path="/" element={<LandingPageWrapper lang={lang} setLang={setLang} />} />
         </Routes>
+        <ReloadPrompt />
       </AuthProvider>
     </BrowserRouter>
   );
