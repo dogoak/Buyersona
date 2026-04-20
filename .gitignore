@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 .env
 .env.*
+fix*.cjs
+fix*.js
+test_*.cjs
+supabase/.temp/
