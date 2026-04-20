@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Language } from '../types';
 import {
     LogOut, User, FileText, Settings, CreditCard, ChevronDown,
-    Globe, BarChart3, Plus, Shield, Mail
+    Globe, BarChart3, Plus, Shield, Mail, Target
 } from 'lucide-react';
 import { Isotype, FullLogo } from './BrandAssets';
 import { supabase } from '../services/supabaseClient';
@@ -61,6 +61,7 @@ export default function AppHeader({ lang, setLang }: AppHeaderProps) {
 
     const menuItems = [
         { label: 'Mis Reportes', icon: FileText, path: '/dashboard' },
+        // { label: 'Prospector B2B', icon: Target, path: '/dashboard/prospector/dashboard' }, // Hidden until ready
         { label: 'Nuevo Análisis', icon: Plus, path: '/onboarding' },
         { label: 'Facturación', icon: CreditCard, path: '/dashboard/billing' },
         { label: 'Configuración', icon: Settings, path: '/dashboard/settings' },

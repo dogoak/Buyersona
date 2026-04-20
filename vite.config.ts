@@ -14,13 +14,15 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
     server: {
-      port: 3000,
+      port: 3002,
       host: '0.0.0.0',
     },
     plugins: [
       react(),
       tailwindcss(),
-      VitePWA({
+      // Only enable PWA in production builds to avoid Service Worker
+      // caching issues during local development
+      ...(mode === 'production' ? [VitePWA({
         registerType: 'prompt',
         includeAssets: ['favicon.png', 'og-image.png'],
         manifest: {
@@ -43,7 +45,7 @@ export default defineConfig(({ mode }) => {
             }
           ]
         }
-      })
+      })] : []),
     ],
     define: {
       '__APP_VERSION__': JSON.stringify(commitHash)

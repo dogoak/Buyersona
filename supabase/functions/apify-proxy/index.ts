@@ -671,6 +671,79 @@ serve(async (req) => {
             }
         }
 
+        // ── Website Content Scraper (for onboarding URL analysis) ──
+        if (action === 'scrape_website_content') {
+            const { url } = payload;
+            if (!url) throw new Error('url required');
+            
+            try {
+                // Simple fetch to get the HTML content of the page
+                const response = await fetch(url, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (compatible; BuyersonaBot/1.0)',
+                        'Accept': 'text/html,application/xhtml+xml',
+                    },
+                    redirect: 'follow',
+                });
+                
+                if (!response.ok) {
+                    return new Response(JSON.stringify({ 
+                        success: true, 
+                        result: { content: '', confidence: 'low', error: `HTTP ${response.status}` } 
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+                
+                const html = await response.text();
+                
+                // Extract meaningful text content from HTML
+                // Remove script, style, nav, footer, and other non-content tags
+                let textContent = html
+                    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+                    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+                    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '[HEADER] ')
+                    .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '')
+                    .replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, '')
+                    // Extract meta tags for context
+                    .replace(/<meta[^>]*name="description"[^>]*content="([^"]*)"[^>]*>/gi, '[META_DESC: $1] ')
+                    .replace(/<meta[^>]*content="([^"]*)"[^>]*name="description"[^>]*>/gi, '[META_DESC: $1] ')
+                    .replace(/<meta[^>]*property="og:description"[^>]*content="([^"]*)"[^>]*>/gi, '[OG_DESC: $1] ')
+                    .replace(/<meta[^>]*content="([^"]*)"[^>]*property="og:description"[^>]*>/gi, '[OG_DESC: $1] ')
+                    .replace(/<title[^>]*>([\s\S]*?)<\/title>/gi, '[TITLE: $1] ')
+                    // Extract text from heading and paragraph tags
+                    .replace(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/gi, '\n$1\n')
+                    .replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, '\n$1\n')
+                    .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '- $1\n')
+                    .replace(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '$2')
+                    .replace(/<[^>]+>/g, ' ')
+                    .replace(/&nbsp;/g, ' ')
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&#[0-9]+;/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                
+                // Limit to ~4000 chars to keep token costs low
+                textContent = textContent.slice(0, 4000);
+                
+                const confidence = textContent.length > 200 ? 'high' : 'low';
+                
+                return new Response(JSON.stringify({ 
+                    success: true, 
+                    result: { content: textContent, confidence, url } 
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                
+            } catch (e: any) {
+                console.error('Website content scraper error:', e.message);
+                return new Response(JSON.stringify({ 
+                    success: true, 
+                    result: { content: '', confidence: 'low', error: e.message } 
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+        }
+
         throw new Error(`Unknown action: ${action}`);
 
     } catch (error: any) {

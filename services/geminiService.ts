@@ -8,30 +8,89 @@ export const analyzeWebsite = async (url: string, lang: Language): Promise<{ res
     // Pricing for gemini-2.5-flash (approx): Input = $0.075 / 1M, Output = $0.30 / 1M
     const inputTokenPriceUsd = 0.075 / 1000000;
     const outputTokenPriceUsd = 0.30 / 1000000;
-    const prompt = lang === 'es'
-        ? `Analiza este sitio web: ${url}. Extrae la siguiente información en formato JSON:
-           - description: Descripción concisa del negocio.
-           - businessType: Array de strings. Opciones válidas: 'factory', 'brand', 'distributor', 'service', 'software', 'other'. Elige las que apliquen.
-           - distributionModel: String. Opciones válidas: 'b2b', 'b2c', 'both'.
-           - productName: Nombre del producto principal.
-           - targetRegion: Región o país principal al que venden.
-           Responde SOLO con el JSON.`
-        : `Analyze this website: ${url}. Extract the following information in JSON format:
-           - description: Concise business description.
-           - businessType: Array of strings. Valid options: 'factory', 'brand', 'distributor', 'service', 'software', 'other'. Choose applicable.
-           - distributionModel: String. Valid options: 'b2b', 'b2c', 'both'.
-           - productName: Main product name.
-           - targetRegion: Main target region or country.
-           Respond ONLY with the JSON.`;
+
+    // Step 1: Scrape real HTML content from the website
+    let websiteContent = '';
+    let scrapeConfidence: 'high' | 'low' = 'low';
+    try {
+        const { scrapeWebsiteContent } = await import('./apifyClient');
+        const scraped = await scrapeWebsiteContent(url);
+        if (scraped && scraped.content) {
+            websiteContent = scraped.content;
+            scrapeConfidence = scraped.confidence;
+        }
+    } catch (e) {
+        console.error("Website scraping failed, will try with Gemini only", e);
+    }
+
+    // Step 2: Build prompt based on whether we got content or not
+    let prompt: string;
+    if (websiteContent && scrapeConfidence === 'high') {
+        // We have real content — analyze it
+        prompt = lang === 'es'
+            ? `Analiza el siguiente contenido extraído del sitio web ${url}.
+            
+CONTENIDO REAL DEL SITIO:
+---
+${websiteContent}
+---
+
+Basándote EXCLUSIVAMENTE en el contenido anterior, extrae la siguiente información en formato JSON:
+- description: Descripción concisa del negocio basada en lo que dice el sitio. 
+- businessType: Array de strings. Opciones válidas: 'factory', 'brand', 'distributor', 'service', 'software', 'other'.
+- distributionModel: String. Opciones válidas: 'b2b', 'b2c', 'both'.
+- productName: Nombre del producto o servicio principal.
+- targetRegion: Región o país principal (si se menciona).
+- confidence: "high"
+
+REGLAS CRÍTICAS:
+- SOLO usa información que esté EXPLÍCITAMENTE en el contenido del sitio.
+- NO inventes, NO asumas, NO agregues información que no esté en el texto.
+- Si algo no se puede determinar del contenido, dejá el campo vacío ("").
+- Es mejor dejar campos vacíos que inventar información incorrecta.
+
+Responde SOLO con el JSON.`
+            : `Analyze the following content extracted from the website ${url}.
+            
+ACTUAL SITE CONTENT:
+---
+${websiteContent}
+---
+
+Based EXCLUSIVELY on the content above, extract the following information in JSON format:
+- description: Concise business description based on what the site says.
+- businessType: Array of strings. Valid options: 'factory', 'brand', 'distributor', 'service', 'software', 'other'.
+- distributionModel: String. Valid options: 'b2b', 'b2c', 'both'.
+- productName: Main product or service name.
+- targetRegion: Main target region or country (if mentioned).
+- confidence: "high"
+
+CRITICAL RULES:
+- ONLY use information EXPLICITLY present in the site content.
+- DO NOT invent, DO NOT assume, DO NOT add information not in the text.
+- If something cannot be determined from the content, leave the field empty ("").
+- It is better to leave fields empty than to provide incorrect information.
+
+Respond ONLY with the JSON.`;
+    } else {
+        // No content or low confidence — return empty with warning
+        const emptyResult = JSON.stringify({
+            description: '',
+            businessType: [],
+            distributionModel: '',
+            productName: '',
+            targetRegion: '',
+            confidence: 'low'
+        });
+        return { result: emptyResult, costUsd: 0 };
+    }
 
     try {
         const response = await callGeminiProxy({
             action: 'analyze_website',
             model: modelName,
             contents: prompt,
-            config: {
-                tools: [{ googleSearch: {} }],
-            }
+            config: {}
         });
 
         // Manual JSON extraction since we can't enforce MIME type with tools
@@ -44,7 +103,6 @@ export const analyzeWebsite = async (url: string, lang: Language): Promise<{ res
             costUsd = (response.usageMetadata.promptTokenCount * inputTokenPriceUsd) +
                 (response.usageMetadata.candidatesTokenCount * outputTokenPriceUsd);
         } else {
-            // Fallback token estimation (approx 4 chars per token)
             const estimatedPromptTokens = prompt.length / 4;
             const estimatedResponseTokens = resultString.length / 4;
             costUsd = (estimatedPromptTokens * inputTokenPriceUsd) + (estimatedResponseTokens * outputTokenPriceUsd);
@@ -212,8 +270,9 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
     Explore Secondary Market: ${input.exploreSecondaryMarket ? `Yes, exploring ${input.secondaryMarketType}` : 'No, focus on core'}
     
     === OPERATIONS ===
+    Sales Model: ${input.salesModel || 'assisted'} ${input.salesModel === 'self_service' ? '(IMPORTANT: This is a SELF-SERVICE business. The customer buys alone, no human sales interaction. Focus on UX, app onboarding, retention, and churn reduction instead of sales team capacity.)' : input.salesModel === 'mixed' ? '(Mixed model: some self-service, some assisted)' : '(Traditional assisted sales)'}
     Team Size: ${input.teamSize}
-    Capacity: ${input.capacityPerDay} leads/day via ${input.capacityChannel.join(', ')}
+    ${input.salesModel !== 'self_service' ? `Capacity: ${input.capacityPerDay} leads/day via ${input.capacityChannel.join(', ')}` : 'Capacity: Self-service (no lead capacity constraints)'}
     Response SLA: ${input.responseSla}
     Automation Level: ${input.automationTools.join(', ')}
     Support Readiness for New Segment: ${input.supportReadiness || 'N/A'}
@@ -231,6 +290,13 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
     Your Goal:
     1. **Executive Summary:** Write a warm, human, professional summary. Avoid robotic language. Speak directly to the business owner.
     2. **Market Pulse:** Provide industry benchmarks (CAC, Conversion, Sales Cycle) specifically for a ${input.businessType.join('/')} in ${input.targetRegion}.
+    ${input.businessStage === 'idea' || input.businessStage === 'startup' ? `
+    ⚠️ EARLY-STAGE BUSINESS: This business is in "${input.businessStage}" stage. Adjust ALL advice accordingly:
+    - Focus on VALIDATION, product-market fit, and launch strategy instead of scaling advice.
+    - Use simpler, lower-budget recommendations.
+    - The pains are about uncertainty, not operations. Address them empathetically.
+    - Don't assume they have established metrics or processes.
+    ` : ''}
     3. **Demand Map (Personas):** Create 4 highly detailed personas. DO NOT use proper names (e.g., "Marketing Mary"). Use descriptive archetypes (e.g., "The Overwhelmed Founder").
        CRITICAL: If "Both" scopes are selected, or if "Secondary Market" is being explored, you MUST include personas from BOTH worlds (B2B and B2C) and label them accordingly.
     4. **Strategy Mapping (Crucial):** For EACH persona, you MUST define the specific "Winning Strategy".
@@ -238,7 +304,13 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
        - **Budget**: Estimate minimum monthly budget to see results on the best channel.
        - **Content**: Provide 3 distinct content ideas (not just one).
     5. **Operational Check:** 
+       ${input.salesModel === 'self_service' ? `
+       - This is a SELF-SERVICE model. Do NOT analyze lead capacity or sales team bottlenecks.
+       - Instead, focus on: product UX, user onboarding flow, retention rate, churn risk, and self-service conversion optimization.
+       - Recommend tools for analytics, A/B testing, and user feedback.
+       ` : `
        - If they are exploring a secondary market (e.g. B2C) but marked "Partial" or "No" readiness, give a strong warning.
+       `}
        - **Automation Advice**: Based on their current tools (${input.automationTools.join(', ')}), recommend 1 specific, easy-to-implement tool to improve efficiency (e.g., if no CRM, suggest a simple one like HubSpot or Pipedrive; if no AI, suggest a simple chatbot). Keep it low-tech friendly.
     6. **Competitor Analysis:** Identify 3 real competitors based on the business description and region (${input.targetRegion}).
     7. **Social Listening:** Find 5 relevant conversations or trends on social media (Reddit, LinkedIn, etc.) related to this product/service.
