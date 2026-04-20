@@ -272,7 +272,7 @@ export default function ReportsList() {
             </div>
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 mb-8 sm:mb-10">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-8 sm:mb-10">
                 <button
                     onClick={() => navigate('/onboarding')}
                     className="group relative bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-2xl p-3 sm:p-6 flex flex-col items-center sm:items-start justify-center sm:justify-start text-center sm:text-left hover:shadow-xl hover:shadow-indigo-200 transition-all transform hover:-translate-y-1 overflow-hidden aspect-square sm:aspect-auto"
