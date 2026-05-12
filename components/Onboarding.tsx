@@ -93,7 +93,7 @@ const LocationAutocomplete = ({ value, onChange, placeholder }: { value: string,
   };
 
   return (
-    <div className="relative w-full" ref={wrapperRef}>
+    <div className="relative w-full" ref={wrapperRef} style={{ isolation: 'isolate' }}>
       <div className="relative">
         <MapPin className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
         <input
@@ -112,7 +112,7 @@ const LocationAutocomplete = ({ value, onChange, placeholder }: { value: string,
       </div>
 
       {showDropdown && results.length > 0 && (
-        <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden animate-fade-in-up">
+        <div className="absolute z-[200] w-full mt-2 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden animate-fade-in-up">
           <ul>
             {results.map((item) => (
               <li
@@ -896,7 +896,20 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
               </div>
             )}
 
-            <Question label={t.questions.q_inaction} hint={t.questions.q_inaction_hint}>
+            <Question
+              label={
+                formData.distributionModel === 'b2b'
+                  ? (lang === 'es' ? '¿Qué le pasa al negocio de tu cliente si no te compra?' : 'What happens to your customer\'s business if they don\'t buy from you?')
+                  : formData.distributionModel === 'both'
+                  ? (lang === 'es' ? '¿Qué pasa si tu cliente no lo usa o no te recompra?' : 'What happens if your customer doesn\'t use it or stops buying from you?')
+                  : t.questions.q_inaction
+              }
+              hint={
+                formData.distributionModel === 'b2b'
+                  ? (lang === 'es' ? 'Pensalo desde el impacto en el negocio de tu cliente (margen, operación, riesgo).' : 'Think about the business impact for your customer (margin, operations, risk).')
+                  : t.questions.q_inaction_hint
+              }
+            >
               <div className="relative">
                 <input
                   type="text"
@@ -913,7 +926,15 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
               </div>
             </Question>
 
-            <Question label={t.questions.q_freq}>
+            <Question
+              label={
+                formData.distributionModel === 'b2b'
+                  ? (lang === 'es' ? '¿Con qué frecuencia tu cliente recompra o renueva?' : 'How often does your customer repurchase or renew?')
+                  : formData.distributionModel === 'both'
+                  ? (lang === 'es' ? '¿Con qué frecuencia se usa o rota tu producto?' : 'How often is your product used or reordered?')
+                  : t.questions.q_freq
+              }
+            >
               <div className="grid grid-cols-1 gap-3">
                 {[
                   { id: 'yes', label: t.options.freq_yes },

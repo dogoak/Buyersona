@@ -243,9 +243,19 @@ export const analyzeBusinessGrowth = async (input: BusinessInput, lang: Language
     Product Name: ${input.productName}
     Secondary Benefits: ${input.secondaryBenefits.join(', ')}
     Market Positioning: ${input.marketPositioning}
-    Customer Pain of Inaction: ${input.painOfInaction}
+    ${input.distributionModel === 'b2b'
+        ? `Customer Pain of Not Buying From You (business impact for the buyer): ${input.painOfInaction}`
+        : input.distributionModel === 'both'
+        ? `Customer Pain of Not Using / Not Buying From You: ${input.painOfInaction}`
+        : `Customer Pain of Not Using the Product: ${input.painOfInaction}`
+    }
     Price Relativity: ${input.priceRelativity}
-    Usage Frequency: ${input.usageFrequency.join(', ')}
+    ${input.distributionModel === 'b2b'
+        ? `Repurchase / Rotation Frequency (how often the BUYER reorders from you): ${input.usageFrequency.join(', ')}`
+        : input.distributionModel === 'both'
+        ? `Usage and/or Repurchase Frequency (end-consumer usage OR buyer reorder cycle): ${input.usageFrequency.join(', ')}`
+        : `End-Consumer Usage Frequency: ${input.usageFrequency.join(', ')}`
+    }
 
     === ECONOMICS ===
     Target Customer: ${input.targetCustomer.join(', ')}

@@ -544,8 +544,11 @@ export default function ReportsList() {
                                                             // Reset digital audit to pending so it re-generates
                                                             await supabase.from('digital_audits').update({ status: 'pending' }).eq('id', report.id);
                                                             navigate(`/digital-audit/report/${report.id}`);
+                                                        } else if (report.type === 'product') {
+                                                            navigate(`/deep-dive/report/${report.id}`);
                                                         } else {
-                                                            navigate('/onboarding');
+                                                            // Navigate to report view, which auto-retries via useEffect when status is 'failed'
+                                                            navigate(`/dashboard/report/${report.id}`);
                                                         }
                                                     }}
                                                     className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-700 rounded-lg text-sm font-semibold hover:bg-amber-100 transition"
