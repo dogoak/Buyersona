@@ -93,7 +93,7 @@ const LocationAutocomplete = ({ value, onChange, placeholder }: { value: string,
   };
 
   return (
-    <div className="relative w-full" ref={wrapperRef}>
+    <div className="relative w-full" ref={wrapperRef} style={{ isolation: 'isolate' }}>
       <div className="relative">
         <MapPin className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
         <input
@@ -112,7 +112,7 @@ const LocationAutocomplete = ({ value, onChange, placeholder }: { value: string,
       </div>
 
       {showDropdown && results.length > 0 && (
-        <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden animate-fade-in-up">
+        <div className="absolute z-[200] w-full mt-2 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden animate-fade-in-up">
           <ul>
             {results.map((item) => (
               <li
@@ -282,6 +282,7 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
     secondaryMarketType: undefined,
 
     // Operations
+    salesModel: 'assisted',
     teamSize: 1,
     capacityPerDay: 10,
     capacityChannel: [],
@@ -304,39 +305,50 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const [urlAnalysisConfidence, setUrlAnalysisConfidence] = useState<'high' | 'low' | null>(null);
+
   const handleUrlAnalysis = async () => {
     if (!formData.websiteUrl) return;
     setIsAnalyzingUrl(true);
+    setUrlAnalysisConfidence(null);
 
     // Safety timeout to prevent infinite loading
     const timeoutId = setTimeout(() => {
       setIsAnalyzingUrl(false);
-      // Optional: You could set an error state here to show a message to the user
-    }, 15000); // 15 seconds max
+    }, 30000); // 30 seconds max (scrape + AI)
 
     try {
       const { result: jsonString, costUsd } = await analyzeWebsite(formData.websiteUrl, lang);
       if (jsonString) {
         try {
           const data = JSON.parse(jsonString);
-          setFormData(prev => ({
-            ...prev,
-            description: data.description || prev.description,
-            productName: data.productName || prev.productName,
-            targetRegion: data.targetRegion || prev.targetRegion,
-            businessType: Array.isArray(data.businessType) ? data.businessType : (data.businessType ? [data.businessType] : prev.businessType),
-            distributionModel: data.distributionModel || prev.distributionModel,
-            productTargetScope: data.distributionModel || prev.productTargetScope, // Auto-sync scope
-            websiteAnalysisCostUsd: costUsd
-          }));
+          const confidence = data.confidence || 'high';
+          setUrlAnalysisConfidence(confidence);
+
+          if (confidence === 'high' && data.description) {
+            setFormData(prev => ({
+              ...prev,
+              description: data.description || prev.description,
+              productName: data.productName || prev.productName,
+              targetRegion: data.targetRegion || prev.targetRegion,
+              businessType: Array.isArray(data.businessType) && data.businessType.length > 0 ? data.businessType : prev.businessType,
+              distributionModel: data.distributionModel || prev.distributionModel,
+              productTargetScope: data.distributionModel || prev.productTargetScope,
+              websiteAnalysisCostUsd: costUsd
+            }));
+          } else {
+            // Low confidence — don't auto-fill, let user write
+            setUrlAnalysisConfidence('low');
+            updateField('websiteAnalysisCostUsd', costUsd);
+          }
         } catch (e) {
-          // Fallback if not JSON (legacy support)
           updateField('description', jsonString);
           updateField('websiteAnalysisCostUsd', costUsd);
         }
       }
     } catch (e) {
       console.error("Analysis failed", e);
+      setUrlAnalysisConfidence('low');
     } finally {
       clearTimeout(timeoutId);
       setIsAnalyzingUrl(false);
@@ -505,6 +517,21 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
             </div>
           </Question>
 
+          {/* Low confidence warning */}
+          {urlAnalysisConfidence === 'low' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-start gap-3 animate-fade-in">
+              <AlertCircle className="text-amber-500 mt-0.5 flex-shrink-0" size={20} />
+              <div>
+                <p className="text-sm font-bold text-amber-800">
+                  {lang === 'es' ? 'No pudimos obtener información suficiente de tu sitio web.' : 'We could not get enough information from your website.'}
+                </p>
+                <p className="text-xs text-amber-600 mt-1">
+                  {lang === 'es' ? 'Completá la descripción manualmente para obtener un informe más preciso.' : 'Fill in the description manually for a more accurate report.'}
+                </p>
+              </div>
+            </div>
+          )}
+
           <Question label={lang === 'es' ? 'Descripción del Negocio' : 'Business Description'} hint={lang === 'es' ? 'Edita si el análisis automático no fue preciso.' : 'Edit if the automatic analysis was not accurate.'} optional>
             <textarea
               className="w-full px-5 py-4 rounded-xl border-2 border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none text-md transition-all h-32"
@@ -590,6 +617,25 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
                   icon={opt.icon}
                   selected={formData.distributionModel === opt.id}
                   onClick={() => updateField('distributionModel', opt.id)}
+                />
+              ))}
+            </div>
+          </Question>
+
+          {/* Sales Model — Self-service vs Assisted */}
+          <Question label={lang === 'es' ? '¿Cómo es el proceso de venta?' : 'How does the sales process work?'} hint={lang === 'es' ? 'Esto adapta las preguntas operativas a tu modelo.' : 'This adapts operational questions to your model.'}>
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { id: 'self_service', label: lang === 'es' ? 'Self-service (el cliente compra solo)' : 'Self-service', icon: Smartphone },
+                { id: 'assisted', label: lang === 'es' ? 'Asistido (alguien atiende)' : 'Assisted (someone helps)', icon: Users },
+                { id: 'mixed', label: lang === 'es' ? 'Mixto' : 'Mixed', icon: Repeat },
+              ].map(opt => (
+                <CardOption
+                  key={opt.id}
+                  label={opt.label}
+                  icon={opt.icon}
+                  selected={formData.salesModel === opt.id}
+                  onClick={() => updateField('salesModel', opt.id)}
                 />
               ))}
             </div>
@@ -850,7 +896,20 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
               </div>
             )}
 
-            <Question label={t.questions.q_inaction} hint={t.questions.q_inaction_hint}>
+            <Question
+              label={
+                formData.distributionModel === 'b2b'
+                  ? (lang === 'es' ? '¿Qué le pasa al negocio de tu cliente si no te compra?' : 'What happens to your customer\'s business if they don\'t buy from you?')
+                  : formData.distributionModel === 'both'
+                  ? (lang === 'es' ? '¿Qué pasa si tu cliente no lo usa o no te recompra?' : 'What happens if your customer doesn\'t use it or stops buying from you?')
+                  : t.questions.q_inaction
+              }
+              hint={
+                formData.distributionModel === 'b2b'
+                  ? (lang === 'es' ? 'Pensalo desde el impacto en el negocio de tu cliente (margen, operación, riesgo).' : 'Think about the business impact for your customer (margin, operations, risk).')
+                  : t.questions.q_inaction_hint
+              }
+            >
               <div className="relative">
                 <input
                   type="text"
@@ -867,7 +926,15 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
               </div>
             </Question>
 
-            <Question label={t.questions.q_freq}>
+            <Question
+              label={
+                formData.distributionModel === 'b2b'
+                  ? (lang === 'es' ? '¿Con qué frecuencia tu cliente recompra o renueva?' : 'How often does your customer repurchase or renew?')
+                  : formData.distributionModel === 'both'
+                  ? (lang === 'es' ? '¿Con qué frecuencia se usa o rota tu producto?' : 'How often is your product used or reordered?')
+                  : t.questions.q_freq
+              }
+            >
               <div className="grid grid-cols-1 gap-3">
                 {[
                   { id: 'yes', label: t.options.freq_yes },
@@ -1073,10 +1140,24 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
       case 3:
         const canExploreSecondary = formData.productTargetScope === 'b2b' || formData.productTargetScope === 'b2c';
         const secondaryLabel = formData.productTargetScope === 'b2b' ? t.options.explore_yes_b2c : t.options.explore_yes_b2b;
+        const isEarlyStage = formData.businessStage === 'idea' || formData.businessStage === 'startup';
 
         return (
           <>
             <SectionTitle title={t.steps.acquisition} icon={BarChart3} />
+
+            {isEarlyStage && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+                <Lightbulb className="text-blue-500 mt-0.5 flex-shrink-0" size={20} />
+                <p className="text-sm text-blue-700">
+                  {lang === 'es' 
+                    ? (formData.businessStage === 'idea'
+                      ? 'Como estás validando tu idea, respondé según lo que planeas o imaginás. Si no sabés, no hay problema — ayudamos a definirlo.'
+                      : 'Como estás en etapa de lanzamiento, respondé según lo que planeas o crees que va a funcionar. Si no sabés, no hay problema — ayudamos a definirlo.')
+                    : 'Since you\'re in early stage, answer based on what you plan or think will work. If unsure, that\'s ok — we\'ll help define it.'}
+                </p>
+              </div>
+            )}
 
             {/* SALES CHANNELS (Where transaction happens) */}
             <Question label={lang === 'es' ? '¿Dónde se concreta la venta?' : 'Where does the sale happen?'}>
@@ -1110,7 +1191,7 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
             </Question>
 
             {/* SOCIAL MEDIA PRESENCE */}
-            <Question label={lang === 'es' ? '¿En qué redes sociales tenés presencia activa?' : 'Which social media platforms are you active on?'} hint={lang === 'es' ? 'Seleccioná todas las que uses.' : 'Select all that apply.'}>
+            <Question label={lang === 'es' ? (isEarlyStage ? '¿En qué redes sociales vas a tener presencia?' : '¿En qué redes sociales tenés presencia activa?') : 'Which social media platforms are you active on?'} hint={lang === 'es' ? (isEarlyStage ? 'Seleccioná todas las que uses o vayas a usar.' : 'Seleccioná todas las que uses.') : 'Select all that apply.'}>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                 {[
                   { id: 'instagram', label: 'Instagram' },
@@ -1266,11 +1347,29 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
         );
 
       // STAGE 4: OPERATIONS
-      case 4: return (
+      case 4:
+        const isSelfService = formData.salesModel === 'self_service';
+        const showAssistedOps = formData.salesModel === 'assisted' || formData.salesModel === 'mixed';
+        
+        return (
         <>
           <SectionTitle title={t.steps.operations} icon={Activity} />
 
-          <Question label={t.questions.q_team}>
+          {isSelfService && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+              <Smartphone className="text-emerald-500 mt-0.5 flex-shrink-0" size={20} />
+              <p className="text-sm text-emerald-700">
+                {lang === 'es' 
+                  ? 'Como tu modelo es self-service, adaptamos las preguntas a tu realidad. No te preguntamos por atención comercial sino por lo que realmente importa para tu producto.'
+                  : 'Since your model is self-service, we adapted questions to your reality.'}
+              </p>
+            </div>
+          )}
+
+          <Question label={isSelfService
+            ? (lang === 'es' ? '¿Cuántas personas trabajan en el proyecto?' : 'How many people work on the project?')
+            : t.questions.q_team
+          }>
             <div className="flex items-center space-x-6 bg-white p-6 rounded-2xl border-2 border-slate-100 shadow-sm">
               <input
                 type="range"
@@ -1287,44 +1386,51 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
             </div>
           </Question>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Question label={t.questions.q_capacity}>
-              <div className="flex items-center space-x-6 bg-white p-6 rounded-2xl border-2 border-slate-100 shadow-sm">
-                <input
-                  type="range"
-                  min="1"
-                  max="200"
-                  step="1"
-                  className="flex-grow h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                  value={formData.capacityPerDay}
-                  onChange={(e) => updateField('capacityPerDay', parseInt(e.target.value))}
-                />
-                <div className="w-16 h-16 rounded-xl bg-emerald-500 text-white flex items-center justify-center text-2xl font-bold shadow-lg shadow-emerald-200">
-                  {formData.capacityPerDay}
-                </div>
-              </div>
-            </Question>
-            <Question label={t.questions.q_capacity_channel}>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { id: 'phone', label: 'Phone', icon: Phone },
-                  { id: 'email', label: 'Email', icon: Mail },
-                  { id: 'chat', label: 'Chat/WA', icon: MessageCircle },
-                  { id: 'meeting', label: 'Zoom/Meet', icon: Users },
-                ].map(opt => (
-                  <CardOption
-                    key={opt.id}
-                    label={opt.label}
-                    icon={opt.icon}
-                    selected={formData.capacityChannel.includes(opt.id)}
-                    onClick={() => toggleArrayField('capacityChannel', opt.id)}
+          {/* Only show leads/capacity for assisted & mixed models */}
+          {showAssistedOps && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Question label={t.questions.q_capacity}>
+                <div className="flex items-center space-x-6 bg-white p-6 rounded-2xl border-2 border-slate-100 shadow-sm">
+                  <input
+                    type="range"
+                    min="1"
+                    max="200"
+                    step="1"
+                    className="flex-grow h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                    value={formData.capacityPerDay}
+                    onChange={(e) => updateField('capacityPerDay', parseInt(e.target.value))}
                   />
-                ))}
-              </div>
-            </Question>
-          </div>
+                  <div className="w-16 h-16 rounded-xl bg-emerald-500 text-white flex items-center justify-center text-2xl font-bold shadow-lg shadow-emerald-200">
+                    {formData.capacityPerDay}
+                  </div>
+                </div>
+              </Question>
+              <Question label={t.questions.q_capacity_channel}>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { id: 'phone', label: 'Phone', icon: Phone },
+                    { id: 'email', label: 'Email', icon: Mail },
+                    { id: 'chat', label: 'Chat/WA', icon: MessageCircle },
+                    { id: 'meeting', label: 'Zoom/Meet', icon: Users },
+                  ].map(opt => (
+                    <CardOption
+                      key={opt.id}
+                      label={opt.label}
+                      icon={opt.icon}
+                      selected={formData.capacityChannel.includes(opt.id)}
+                      onClick={() => toggleArrayField('capacityChannel', opt.id)}
+                    />
+                  ))}
+                </div>
+              </Question>
+            </div>
+          )}
 
-          <Question label={t.questions.q_response_sla}>
+          {/* For self-service: ask about response SLA for support, not sales */}
+          <Question label={isSelfService 
+            ? (lang === 'es' ? 'Tiempo de respuesta de soporte' : 'Support Response Time')
+            : t.questions.q_response_sla
+          }>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { id: 'instant', label: t.options.sla_instant, icon: Zap },
@@ -1343,15 +1449,24 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
             </div>
           </Question>
 
-          <Question label={t.questions.q_automation}>
+          <Question label={isSelfService
+            ? (lang === 'es' ? '¿Qué herramientas usás o planeas usar?' : 'What tools do you use or plan to use?')
+            : t.questions.q_automation
+          }>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {[
+              {(isSelfService ? [
+                { id: 'bot', label: lang === 'es' ? 'Chatbot / FAQ' : 'Chatbot / FAQ', icon: Bot },
+                { id: 'email', label: t.options.auto_email, icon: Mail },
+                { id: 'analytics', label: lang === 'es' ? 'Analytics (GA, Mixpanel...)' : 'Analytics (GA, Mixpanel...)', icon: BarChart3 },
+                { id: 'zapier', label: t.options.auto_zap, icon: Workflow },
+                { id: 'none', label: t.options.auto_none, icon: XCircle },
+              ] : [
                 { id: 'crm', label: t.options.auto_crm, icon: Database },
                 { id: 'bot', label: t.options.auto_bot, icon: Bot },
                 { id: 'email', label: t.options.auto_email, icon: Mail },
                 { id: 'zapier', label: t.options.auto_zap, icon: Workflow },
                 { id: 'none', label: t.options.auto_none, icon: XCircle },
-              ].map(opt => (
+              ]).map(opt => (
                 <CardOption
                   key={opt.id}
                   label={opt.label}
@@ -1382,12 +1497,15 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
             </Question>
           )}
 
-          <Question label={t.questions.q_surge}>
+          <Question label={isSelfService
+            ? (lang === 'es' ? '¿Qué pasa si mañana se registran 100 usuarios nuevos?' : 'What happens if 100 new users sign up tomorrow?')
+            : t.questions.q_surge
+          }>
             <div className="grid grid-cols-3 gap-4">
               {[
-                { id: 'lose', label: t.options.lose, icon: AlertCircle },
-                { id: 'bad', label: t.options.bad, icon: Clock },
-                { id: 'handle', label: t.options.handle, icon: Check },
+                { id: 'lose', label: isSelfService ? (lang === 'es' ? 'No lo soportaría' : "Can't handle it") : t.options.lose, icon: AlertCircle },
+                { id: 'bad', label: isSelfService ? (lang === 'es' ? 'Funcionaría con problemas' : 'Would work with issues') : t.options.bad, icon: Clock },
+                { id: 'handle', label: isSelfService ? (lang === 'es' ? 'Preparado para escalar' : 'Ready to scale') : t.options.handle, icon: Check },
               ].map(opt => (
                 <CardOption
                   key={opt.id}
@@ -1403,20 +1521,55 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
       );
 
       // STAGE 5: PAIN
-      case 5: return (
+      case 5:
+        const isEarlyStagePain = formData.businessStage === 'idea' || formData.businessStage === 'startup';
+        
+        // Dynamic pain options based on business stage
+        const earlyPainOptions = [
+          { id: 'dont_know_how_to_launch', label: lang === 'es' ? 'No sé cómo lanzar al mercado' : "Don't know how to launch" },
+          { id: 'no_product_market_fit', label: lang === 'es' ? 'No sé si mi producto tiene mercado' : "Don't know if my product has market fit" },
+          { id: 'no_marketing_budget', label: lang === 'es' ? 'No tengo presupuesto para marketing' : 'No marketing budget' },
+          { id: 'dont_know_positioning', label: lang === 'es' ? 'No sé cómo posicionarme' : "Don't know how to position" },
+          { id: 'dont_know_who_to_sell_to', label: lang === 'es' ? 'No sé a quién venderle' : "Don't know who to sell to" },
+          { id: 'too_much_competition', label: lang === 'es' ? 'Mucha competencia, difícil diferenciarse' : 'Too much competition' },
+          { id: 'other', label: lang === 'es' ? 'Otro' : 'Other' },
+        ];
+        const establishedPainOptions = [
+          { id: 'no_clients', label: t.options.no_clients },
+          { id: 'bad_clients', label: t.options.bad_clients },
+          { id: 'chaos', label: t.options.chaos },
+          { id: 'expensive', label: t.options.expensive },
+          { id: 'burnout', label: t.options.burnout },
+          { id: 'competition', label: t.options.competition },
+          { id: 'high_churn', label: lang === 'es' ? 'Churn alto / Pierdo clientes' : 'High churn / Losing clients' },
+          { id: 'cant_scale', label: lang === 'es' ? 'No puedo escalar' : "Can't scale" },
+          { id: 'other', label: lang === 'es' ? 'Otro' : 'Other' },
+        ];
+        const painOptions = isEarlyStagePain ? earlyPainOptions : establishedPainOptions;
+
+        return (
         <>
           <SectionTitle title={t.steps.pain} icon={ShieldAlert} />
-          <Question label={t.questions.q_pain}>
+
+          {isEarlyStagePain && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+              <Lightbulb className="text-blue-500 mt-0.5 flex-shrink-0" size={20} />
+              <p className="text-sm text-blue-700">
+                {lang === 'es' 
+                  ? (formData.businessStage === 'idea'
+                    ? 'Es normal en etapa de validación no tener todos los problemas claros. Seleccioná los que más te preocupen.'
+                    : 'Es normal en etapa de lanzamiento no tener todos los problemas definidos. Seleccioná los que más te identifiquen.')
+                  : 'It\'s normal at early stage to not have all problems defined. Select those that resonate most.'}
+              </p>
+            </div>
+          )}
+
+          <Question label={isEarlyStagePain 
+            ? (lang === 'es' ? (formData.businessStage === 'idea' ? '¿Cuáles son tus mayores miedos o dudas sobre tu idea?' : '¿Cuáles son tus mayores desafíos actuales?') : 'What are your biggest current challenges?')
+            : t.questions.q_pain
+          }>
             <div className="grid grid-cols-2 gap-4">
-              {[
-                { id: 'no_clients', label: t.options.no_clients },
-                { id: 'bad_clients', label: t.options.bad_clients },
-                { id: 'chaos', label: t.options.chaos },
-                { id: 'expensive', label: t.options.expensive },
-                { id: 'burnout', label: t.options.burnout },
-                { id: 'competition', label: t.options.competition },
-                { id: 'other', label: lang === 'es' ? 'Otro' : 'Other' },
-              ].map(opt => (
+              {painOptions.map(opt => (
                 <CardOption
                   key={opt.id}
                   label={opt.label}
@@ -1435,7 +1588,10 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
               />
             )}
           </Question>
-          <Question label={t.questions.q_risk}>
+          <Question label={isEarlyStagePain
+            ? (lang === 'es' ? '¿Qué pasa si no resolvés estos desafíos?' : 'What happens if you don\'t solve these challenges?')
+            : t.questions.q_risk
+          }>
             <textarea
               className="w-full px-5 py-4 rounded-xl border-2 border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none text-lg transition-all"
               rows={3}
@@ -1514,6 +1670,7 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
         if (d.businessType.length === 0) missing.push(lang === 'es' ? 'Tipo de negocio' : 'Business Type');
         else if (d.businessType.includes('other') && !d.customBusinessType) missing.push(lang === 'es' ? 'Especifique tipo de negocio' : 'Specify business type');
         if (!d.distributionModel) missing.push(lang === 'es' ? 'Modelo (B2B/B2C)' : 'B2B/B2C Model');
+        if (!d.salesModel) missing.push(lang === 'es' ? 'Proceso de venta' : 'Sales Process');
         break;
       case 1:
         const showB2B = d.distributionModel === 'b2b' || d.distributionModel === 'both';
@@ -1527,16 +1684,16 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
           if (!d.b2bUseCase?.length) missing.push(lang === 'es' ? 'Uso (B2B)' : 'B2B Use Case');
           if (!d.b2bBuyerRole?.length) missing.push(lang === 'es' ? 'Quién decide (B2B)' : 'B2B Decision Maker');
           if (!d.b2bProblemSolved?.length) missing.push(lang === 'es' ? 'Problema principal (B2B)' : 'B2B Main Problem');
-          else if (d.b2bProblemSolved.includes('other') && !d.customB2bProblem) missing.push(lang === 'es' ? 'Describa el problema (B2B)' : 'Describe B2B Problem');
+          else if (d.b2bProblemSolved.length === 1 && d.b2bProblemSolved.includes('other') && !d.customB2bProblem) missing.push(lang === 'es' ? 'Describa el problema (B2B)' : 'Describe B2B Problem');
           if (!d.b2bPurchaseDrivers?.length) missing.push(lang === 'es' ? 'Por qué te eligen (B2B)' : 'B2B Purchase Drivers');
-          else if (d.b2bPurchaseDrivers.includes('other') && !d.customB2bDriver) missing.push(lang === 'es' ? 'Describa el motivo (B2B)' : 'Describe B2B Driver');
+          else if (d.b2bPurchaseDrivers.length === 1 && d.b2bPurchaseDrivers.includes('other') && !d.customB2bDriver) missing.push(lang === 'es' ? 'Describa el motivo (B2B)' : 'Describe B2B Driver');
         }
         if (showB2C) {
           if (!d.b2cPurchaseContext?.length) missing.push(lang === 'es' ? 'Contexto de compra (B2C)' : 'B2C Purchase Context');
           if (!d.b2cProblemSolved?.length) missing.push(lang === 'es' ? 'Problema que resolvés (B2C)' : 'B2C Problem Solved');
-          else if (d.b2cProblemSolved.includes('other') && !d.customB2cProblem) missing.push(lang === 'es' ? 'Describa el problema (B2C)' : 'Describe B2C Problem');
+          else if (d.b2cProblemSolved.length === 1 && d.b2cProblemSolved.includes('other') && !d.customB2cProblem) missing.push(lang === 'es' ? 'Describa el problema (B2C)' : 'Describe B2C Problem');
           if (!d.b2cPurchaseDrivers?.length) missing.push(lang === 'es' ? 'Factor de decisión (B2C)' : 'B2C Purchase Driver');
-          else if (d.b2cPurchaseDrivers.includes('other') && !d.customB2cDriver) missing.push(lang === 'es' ? 'Describa el motivo (B2C)' : 'Describe B2C Driver');
+          else if (d.b2cPurchaseDrivers.length === 1 && d.b2cPurchaseDrivers.includes('other') && !d.customB2cDriver) missing.push(lang === 'es' ? 'Describa el motivo (B2C)' : 'Describe B2C Driver');
           if (!d.b2cNaturalChannel?.length) missing.push(lang === 'es' ? 'Dónde buscan (B2C)' : 'B2C Natural Channel');
         }
         break;
@@ -1560,7 +1717,10 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
         break;
       case 4:
         if (!d.teamSize || d.teamSize <= 0) missing.push(lang === 'es' ? 'Tamaño del equipo' : 'Team Size');
-        if (d.capacityChannel.length === 0) missing.push(lang === 'es' ? 'Cuello de botella' : 'Bottleneck');
+        // Only require capacity/channel for assisted/mixed models
+        if (d.salesModel !== 'self_service') {
+          if (d.capacityChannel.length === 0) missing.push(lang === 'es' ? 'Cuello de botella' : 'Bottleneck');
+        }
         if (!d.surgeHandling) missing.push(lang === 'es' ? 'Escalabilidad' : 'Scalability');
         if (!d.responseSla) missing.push(lang === 'es' ? 'Tiempo de respuesta' : 'Response SLA');
         if (d.automationTools.length === 0) missing.push(lang === 'es' ? 'Automatización' : 'Automation');
@@ -1613,7 +1773,23 @@ export default function Onboarding({ lang, onComplete, onStepChange, initialStep
             {t.back}
           </button>
 
-
+          {/* Dev Skip Button - only in local development */}
+          {window.location.hostname === 'localhost' && (
+            <button
+              onClick={() => {
+                if (currentStep < TOTAL_STEPS - 1) {
+                  const nextStep = currentStep + 1;
+                  setCurrentStep(nextStep);
+                  if (onStepChange) onStepChange(nextStep, formData);
+                }
+                else onComplete(formData);
+              }}
+              className="absolute left-1/2 transform -translate-x-1/2 text-xs text-slate-300 hover:text-indigo-400 font-mono border border-slate-200 px-2 py-1 rounded bg-slate-50"
+              title="Development only: Skip validation"
+            >
+              [SKIP / OMITIR]
+            </button>
+          )}
 
           <div className="flex flex-col items-end gap-2">
             {!isCurrentStepValid() && (

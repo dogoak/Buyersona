@@ -4,7 +4,7 @@ export const translations = {
   en: {
     hero: {
       title: "Who should I sell to?",
-      subtitle: "Where do I find them? And how do I scale without breaking?",
+      subtitle: "Where do I find them? How do I talk to them to turn them into customers?",
       description: "Most businesses don't fail because of their product. They fail because they don't know their real customer.",
       cta_start: "Start Analysis",
       cta_login: "Login",
@@ -369,7 +369,7 @@ export const translations = {
   es: {
     hero: {
       title: "¿A quién le tengo que vender?",
-      subtitle: "¿Dónde los encuentro? ¿Cómo convierto ventas sin romper mi operación?",
+      subtitle: "¿Dónde los encuentro? ¿Cómo les hablo para convertirlos en clientes?",
       description: "La mayoría de las empresas no fracasan por su producto. Fracasan porque no saben quién es su cliente real.",
       cta_start: "Comenzar Ahora",
       cta_login: "Ingresar",

@@ -272,7 +272,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, lang, onReset, onPro
         <div className="min-h-screen bg-slate-50/50 pb-20 font-sans overflow-x-hidden">
             {/* Cleaned up redundant inner header */}
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-12">
+            <main className="w-full px-4 sm:px-6 lg:px-10 xl:px-16 py-10 space-y-12">
 
                 {/* Market Pulse (NEW) */}
                 {data.marketInsights && (

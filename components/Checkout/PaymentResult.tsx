@@ -14,15 +14,16 @@ export default function PaymentResult({ status }: PaymentResultProps) {
     const navigate = useNavigate();
     const reportId = searchParams.get('report_id');
     const analysisId = searchParams.get('analysis_id');
+    const campaignId = searchParams.get('campaign_id');
     const paymentId = searchParams.get('payment_id') || `manual_${Date.now()}`;
     const [checking, setChecking] = useState(status === 'success');
 
     // If success, verify payment and trigger analysis
     useEffect(() => {
-        if (status === 'success' && (reportId || analysisId)) {
+        if (status === 'success' && (reportId || analysisId || campaignId)) {
             verifyAndProceed();
         }
-    }, [status, reportId, analysisId]);
+    }, [status, reportId, analysisId, campaignId]);
 
     const verifyAndProceed = async () => {
         setChecking(true);
@@ -108,6 +109,24 @@ export default function PaymentResult({ status }: PaymentResultProps) {
             } else {
                 setChecking(false);
             }
+        } else if (campaignId) {
+             const { data: campaign } = await supabase
+                .from('prospecting_campaigns')
+                .select('payment_status, status')
+                .eq('id', campaignId)
+                .single();
+
+            if (campaign?.payment_status === 'paid' || status === 'success') {
+                if (campaign?.payment_status !== 'paid' && user) {
+                    await supabase
+                        .from('prospecting_campaigns')
+                        .update({ payment_status: 'paid' })
+                        .eq('id', campaignId);
+                }
+                setChecking(false);
+            } else {
+                setChecking(false);
+            }
         } else {
             setChecking(false);
         }
@@ -136,7 +155,9 @@ export default function PaymentResult({ status }: PaymentResultProps) {
                     </p>
                     <button
                         onClick={() => {
-                            if (analysisId) {
+                            if (campaignId) {
+                                navigate(`/dashboard/prospector/loader/${campaignId}`);
+                            } else if (analysisId) {
                                 navigate(`/dashboard`);
                             } else {
                                 navigate(`/dashboard/report/${reportId}`);
@@ -144,7 +165,7 @@ export default function PaymentResult({ status }: PaymentResultProps) {
                         }}
                         className="group inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-8 py-4 rounded-2xl font-bold hover:shadow-xl hover:shadow-indigo-200 transition-all transform hover:-translate-y-0.5"
                     >
-                        {analysisId ? 'Volver al panel' : 'Ver mi informe'}
+                        {campaignId ? 'Ver Prospectos' : (analysisId ? 'Volver al panel' : 'Ver mi informe')}
                         <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                     </button>
                 </div>
@@ -194,7 +215,9 @@ export default function PaymentResult({ status }: PaymentResultProps) {
                     </button>
                     <button
                         onClick={() => {
-                            if (analysisId) {
+                            if (campaignId) {
+                                navigate(`/dashboard/prospector/checkout/${campaignId}`);
+                            } else if (analysisId) {
                                 navigate(`/deep-dive/checkout/${analysisId}`);
                             } else if (reportId) {
                                 navigate(`/checkout/${reportId}`);

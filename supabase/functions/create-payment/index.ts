@@ -54,10 +54,10 @@ Deno.serve(async (req: Request) => {
             });
         }
 
-        const { report_id, analysis_id, success_url, failure_url } = await req.json();
+        const { report_id, analysis_id, campaign_id, success_url, failure_url } = await req.json();
 
-        if (!report_id && !analysis_id) {
-            return new Response(JSON.stringify({ error: 'report_id or analysis_id is required' }), {
+        if (!report_id && !analysis_id && !campaign_id) {
+            return new Response(JSON.stringify({ error: 'report_id, analysis_id, or campaign_id is required' }), {
                 status: 400,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
@@ -102,6 +102,32 @@ Deno.serve(async (req: Request) => {
             itemTitle = `Product Deep Dive - ${bName}`;
             itemDescription = 'Analisis tactico profundo de producto, mapa conductual, pitch de ventas y matriz de objeciones.';
             paymentTargetId = analysis_id;
+        } else if (campaign_id) {
+             // -- PROSPECTOR CAMPAIGN LOGIC --
+            const { data: campaign, error: campaignError } = await adminClient
+                .from('prospecting_campaigns')
+                .select('id, name, user_id, payment_status')
+                .eq('id', campaign_id)
+                .single();
+
+            if (campaignError || !campaign) {
+                return new Response(JSON.stringify({ error: 'Prospector Campaign not found' }), {
+                    status: 404,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+            }
+
+            if (campaign.user_id !== user.id) {
+                return new Response(JSON.stringify({ error: 'Unauthorized for this campaign' }), {
+                    status: 403,
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+            }
+
+            isAlreadyPaid = campaign.payment_status === 'paid';
+            itemTitle = `Buyersona Prospector - ${campaign.name || 'Campaña'}`;
+            itemDescription = 'Identificación de Perfil de Cliente Ideal (ICP) y listado de leads cualificados con correos hiper-personalizados por IA.';
+            paymentTargetId = campaign_id;
         } else {
             // -- BUSINESS REPORT LOGIC --
             const { data: report, error: reportError } = await adminClient
@@ -132,7 +158,7 @@ Deno.serve(async (req: Request) => {
         // Fetch dynamic pricing from system settings
         const { data: settings, error: settingsError } = await adminClient
             .from('system_settings')
-            .select('report_price_ars, deep_dive_price_ars')
+            .select('report_price_ars, deep_dive_price_ars, prospector_campaign_price_ars')
             .eq('id', 1)
             .single();
 
@@ -143,9 +169,14 @@ Deno.serve(async (req: Request) => {
             });
         }
 
-        const unitPrice = isDeepDive
-            ? (settings.deep_dive_price_ars || 12500)
-            : (settings.report_price_ars || 25000);
+        let unitPrice = 25000;
+        if (campaign_id) {
+            unitPrice = settings.prospector_campaign_price_ars || 35000;
+        } else if (isDeepDive) {
+            unitPrice = settings.deep_dive_price_ars || 12500;
+        } else {
+            unitPrice = settings.report_price_ars || 25000;
+        }
 
         // Detect if we are running in local development (Mercado Pago rejects local IPs for webhooks)
         const isLocalDevelopment = SUPABASE_URL.includes('localhost') || SUPABASE_URL.includes('127.0.0.1');
@@ -168,8 +199,10 @@ Deno.serve(async (req: Request) => {
             metadata: {
                 report_id: report_id ? String(report_id) : undefined,
                 analysis_id: analysis_id ? String(analysis_id) : undefined,
+                campaign_id: campaign_id ? String(campaign_id) : undefined,
                 user_id: String(user.id),
                 is_deep_dive: isDeepDive,
+                is_campaign: !!campaign_id,
             },
         };
 
@@ -219,7 +252,9 @@ Deno.serve(async (req: Request) => {
         };
 
         // Link appropriately
-        if (isDeepDive) {
+        if (campaign_id) {
+            paymentRecord.business_report_id = null; // Maybe we could link it if we know the parent report, but not strictly needed for the payment entry 
+        } else if (isDeepDive) {
             paymentRecord.business_report_id = null;
         } else {
             paymentRecord.business_report_id = report_id;

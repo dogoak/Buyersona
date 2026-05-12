@@ -89,6 +89,7 @@ export interface BusinessInput {
   secondaryMarketType?: 'b2b' | 'b2c';
 
   // Stage 5: Operations
+  salesModel: 'self_service' | 'assisted' | 'mixed'; // New: How does the sale happen?
   teamSize: number;
   capacityPerDay: number;
   capacityChannel: string[];

@@ -5,7 +5,7 @@ import { supabase } from '../../services/supabaseClient';
 import {
     FileText, Plus, Clock, CheckCircle, Loader2,
     Eye, Trash2, Share2, Download, BarChart3, ArrowRight, XCircle,
-    Rocket, Target, TrendingUp, Sparkles, Building2, CreditCard, Search, Heart, Globe, Zap
+    Rocket, Target, TrendingUp, Sparkles, Building2, CreditCard, Search, Heart, Globe, Zap, AlertTriangle, X
 } from 'lucide-react';
 import { analyzeProductDeepDive } from '../../services/geminiDeepDiveService';
 import { StrategicAnalysis, DeepDiveInput } from '../../types';
@@ -37,6 +37,7 @@ export default function ReportsList() {
     const [payingVoluntary, setPayingVoluntary] = useState<string | null>(null);
     const [servicesModalOpen, setServicesModalOpen] = useState(false);
     const [servicesModalReportId, setServicesModalReportId] = useState('');
+    const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; type: 'business' | 'product' | 'digital_audit'; name: string } | null>(null);
 
     const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'Usuario';
     const firstName = userName.split(' ')[0];
@@ -160,10 +161,16 @@ export default function ReportsList() {
         }
     };
 
-    const handleDelete = async (reportId: string, type: 'business' | 'product' | 'digital_audit', e: React.MouseEvent) => {
+    const handleDeleteClick = (reportId: string, type: 'business' | 'product' | 'digital_audit', name: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!confirm('¿Estás seguro de que querés eliminar este reporte?')) return;
+        e.preventDefault();
+        setDeleteConfirm({ id: reportId, type, name });
+    };
 
+    const handleDeleteConfirm = async () => {
+        if (!deleteConfirm) return;
+        const { id: reportId, type } = deleteConfirm;
+        setDeleteConfirm(null);
         setDeleting(reportId);
         try {
             const table = type === 'business' ? 'business_reports' : type === 'product' ? 'product_analyses' : 'digital_audits';
@@ -174,8 +181,9 @@ export default function ReportsList() {
 
             if (error) throw error;
             setReports(prev => prev.filter(r => r.id !== reportId));
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error deleting report:', err);
+            alert(`No se pudo eliminar el reporte: ${err.message || 'Error desconocido'}`);
         } finally {
             setDeleting(null);
         }
@@ -308,6 +316,20 @@ export default function ReportsList() {
                     <h3 className="font-bold text-slate-900 text-[11px] leading-tight sm:text-lg mb-1 sm:mb-1">Auditoría<br className="sm:hidden" /> Digital</h3>
                     <p className="text-slate-500 text-sm hidden sm:block">Diagnóstico web, SEO y redes de tu marca (requiere Estrategia).</p>
                 </button>
+
+                {/* Prospector B2B – hidden until ready
+                <button
+                    onClick={() => navigate('/dashboard/prospector/dashboard')}
+                    className="group relative bg-white rounded-2xl p-3 sm:p-6 border border-slate-200 flex flex-col items-center sm:items-start justify-center sm:justify-start text-center sm:text-left hover:border-indigo-200 hover:shadow-md transition-all transform hover:-translate-y-0.5 aspect-square sm:aspect-auto overflow-hidden"
+                >
+                    <div className="absolute top-0 right-0 bg-amber-400 text-amber-900 text-[8px] sm:text-[10px] font-bold px-2 py-0.5 rounded-bl-lg uppercase">BETA</div>
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-50 rounded-xl flex items-center justify-center mb-2 sm:mb-4 group-hover:scale-105 transition-transform">
+                        <Target className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
+                    </div>
+                    <h3 className="font-bold text-slate-900 text-[11px] leading-tight sm:text-lg mb-1 sm:mb-1">Prospector<br className="sm:hidden" /> B2B</h3>
+                    <p className="text-slate-500 text-sm hidden sm:block">Generá leads y automatizá el outreach de ventas corporativas.</p>
+                </button>
+                */}
             </div>
 
             {/* Empty State */}
@@ -522,8 +544,11 @@ export default function ReportsList() {
                                                             // Reset digital audit to pending so it re-generates
                                                             await supabase.from('digital_audits').update({ status: 'pending' }).eq('id', report.id);
                                                             navigate(`/digital-audit/report/${report.id}`);
+                                                        } else if (report.type === 'product') {
+                                                            navigate(`/deep-dive/report/${report.id}`);
                                                         } else {
-                                                            navigate('/onboarding');
+                                                            // Navigate to report view, which auto-retries via useEffect when status is 'failed'
+                                                            navigate(`/dashboard/report/${report.id}`);
                                                         }
                                                     }}
                                                     className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-700 rounded-lg text-sm font-semibold hover:bg-amber-100 transition"
@@ -544,7 +569,7 @@ export default function ReportsList() {
                                                 </button>
                                             )}
                                             <button
-                                                onClick={(e) => handleDelete(report.id, report.type || 'business', e)}
+                                                onClick={(e) => handleDeleteClick(report.id, report.type || 'business', report.business_name, e)}
                                                 disabled={deleting === report.id}
                                                 title="Eliminar"
                                                 className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
@@ -571,6 +596,47 @@ export default function ReportsList() {
                 reportId={servicesModalReportId}
                 lang={lang}
             />
+
+            {/* Delete Confirmation Modal */}
+            {deleteConfirm && (
+                <>
+                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" onClick={() => setDeleteConfirm(null)} />
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative animate-fade-in-up">
+                            <button onClick={() => setDeleteConfirm(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition">
+                                <X size={20} />
+                            </button>
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="p-3 bg-red-100 rounded-xl">
+                                    <AlertTriangle size={24} className="text-red-600" />
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-900">Eliminar reporte</h3>
+                            </div>
+                            <p className="text-slate-600 mb-2">
+                                ¿Estás seguro de que querés eliminar <strong className="text-slate-900">{deleteConfirm.name}</strong>?
+                            </p>
+                            <p className="text-sm text-red-500 font-medium mb-6">
+                                Esta acción no se puede deshacer. Se eliminarán también los análisis vinculados.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setDeleteConfirm(null)}
+                                    className="flex-1 px-4 py-3 border border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleDeleteConfirm}
+                                    className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition flex items-center justify-center gap-2"
+                                >
+                                    <Trash2 size={16} />
+                                    Eliminar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }

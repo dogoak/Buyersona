@@ -183,11 +183,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
           <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-xl shadow-slate-200/50 hover:bg-white transition duration-300 group relative overflow-hidden">
             <div className="absolute top-0 right-0 bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-bl-xl">NEW</div>
             <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 mb-6 group-hover:scale-110 transition-transform duration-300">
-              <Target size={28} />
+              <Package size={28} />
             </div>
             <h3 className="font-bold text-xl text-slate-900 mb-2">Product Deep Dive</h3>
             <p className="text-slate-500 leading-relaxed">Analiza productos específicos a partir del contexto de tu análisis de negocio.</p>
           </div>
+
+          {/* Prospector B2B – hidden until ready
+          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-xl shadow-indigo-100 hover:shadow-indigo-200 transition duration-300 group relative overflow-hidden">
+            <div className="absolute top-0 right-0 bg-amber-400 text-amber-900 text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest border-b border-l border-amber-500">BETA</div>
+            <div className="w-14 h-14 bg-gradient-to-tr from-indigo-500 to-blue-500 rounded-2xl flex items-center justify-center text-white mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-indigo-200">
+              <Target size={28} />
+            </div>
+            <h3 className="font-bold text-xl text-slate-900 mb-2">Prospector B2B</h3>
+            <p className="text-slate-500 leading-relaxed">Motor de generación de leads. Encuentra clientes corporativos en base a tu ICP con 1 clic.</p>
+          </div>
+          */}
         </div>
       </div>
 

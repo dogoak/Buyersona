@@ -6,6 +6,11 @@ import DashboardLayout from './components/Dashboard/DashboardLayout';
 import ReportsList from './components/Dashboard/ReportsList';
 import ReportView from './components/Dashboard/ReportView';
 import BillingPage from './components/Dashboard/BillingPage';
+import DashboardProspector from './components/Prospector/DashboardProspector';
+import WizardCampaign from './components/Prospector/WizardCampaign';
+import CheckoutProspector from './components/Prospector/CheckoutProspector';
+import CampaignLoader from './components/Prospector/CampaignLoader';
+import CampaignView from './components/Prospector/CampaignView';
 import SettingsPage from './components/Dashboard/SettingsPage';
 import CheckoutPage from './components/Checkout/CheckoutPage';
 import PaymentResult from './components/Checkout/PaymentResult';
@@ -314,6 +319,11 @@ function App() {
             <Route index element={<ReportsList />} />
             <Route path="report/:reportId" element={<ReportView lang={lang} />} />
             <Route path="billing" element={<BillingPage />} />
+            <Route path="prospector/dashboard" element={<DashboardProspector />} />
+            <Route path="prospector/new" element={<WizardCampaign />} />
+            <Route path="prospector/checkout/:campaignId" element={<CheckoutProspector />} />
+            <Route path="prospector/loader/:campaignId" element={<CampaignLoader />} />
+            <Route path="prospector/view/:campaignId" element={<CampaignView />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="payment/success" element={<PaymentResult status="success" />} />
             <Route path="payment/failure" element={<PaymentResult status="failure" />} />

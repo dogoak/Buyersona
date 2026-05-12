@@ -212,3 +212,30 @@ export const scrapeInstagramCompetitor = async (username: string): Promise<Insta
         return null;
     }
 };
+
+// ── Website Content Scraper (for onboarding) ─────────────────────────
+export interface WebsiteContentResult {
+    content: string;
+    confidence: 'high' | 'low';
+    url: string;
+    error?: string;
+}
+
+export const scrapeWebsiteContent = async (url: string): Promise<WebsiteContentResult | null> => {
+    try {
+        if (!url) return null;
+        // Ensure URL has protocol
+        const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+        const result = await callApifyProxy('scrape_website_content', { url: fullUrl });
+        if (!result) return { content: '', confidence: 'low', url: fullUrl };
+        return {
+            content: result.content || '',
+            confidence: result.confidence || 'low',
+            url: result.url || fullUrl,
+            error: result.error,
+        };
+    } catch (e) {
+        console.error('Website content scrape failed:', e);
+        return { content: '', confidence: 'low', url };
+    }
+};
