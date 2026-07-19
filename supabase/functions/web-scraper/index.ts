@@ -20,20 +20,20 @@ const SOCIAL_PATTERNS: { platform: string; patterns: RegExp[] }[] = [
     { platform: 'Google Maps', patterns: [/https?:\/\/(www\.)?(google\.com\.ar|google\.com|goo\.gl)\/maps\/[\w?=&.\/-]+/gi, /https?:\/\/maps\.app\.goo\.gl\/[\w]+/gi] },
 ];
 
-// Platform detection patterns
+// Platform detection patterns (URL-based and specific DOM attributes, to avoid false positives on integration texts)
 const PLATFORM_PATTERNS: { name: string; patterns: (string | RegExp)[] }[] = [
-    { name: 'Tienda Nube', patterns: [/tiendanube/i, /nuvemshop/i, /d26lpennugtm8s\.cloudfront\.net/i, /TiendaNube/i] },
-    { name: 'Shopify', patterns: [/shopify/i, /cdn\.shopify\.com/i, /myshopify\.com/i] },
-    { name: 'WordPress', patterns: [/wp-content/i, /wp-includes/i, /wordpress/i] },
-    { name: 'WooCommerce', patterns: [/woocommerce/i, /wc-api/i] },
-    { name: 'Mercado Shops', patterns: [/mercadoshops/i] },
+    { name: 'Tienda Nube', patterns: [/cdn\.tiendanube\.com/i, /nuvemshop/i, /d26lpennugtm8s\.cloudfront\.net/i, /tiendacdn\.com/i] },
+    { name: 'Shopify', patterns: [/cdn\.shopify\.com/i, /myshopify\.com/i, /shopify-active/i, /shopify\.js/i] },
+    { name: 'WordPress', patterns: [/wp-content/i, /wp-includes/i] },
+    { name: 'WooCommerce', patterns: [/plugins\/woocommerce/i, /wc-api/i, /woocommerce-layout/i] },
+    { name: 'Mercado Shops', patterns: [/mshops\.com/i, /mercadoshops\.com/i] },
     { name: 'Wix', patterns: [/wixsite\.com/i, /wix\.com/i, /parastorage\.com/i] },
-    { name: 'Squarespace', patterns: [/squarespace/i, /sqsp\.com/i] },
-    { name: 'PrestaShop', patterns: [/prestashop/i] },
-    { name: 'Magento', patterns: [/magento/i, /mage\/cookies/i] },
-    { name: 'Empretienda', patterns: [/empretienda/i] },
-    { name: 'Webflow', patterns: [/webflow/i] },
-    { name: 'Vtex', patterns: [/vtex/i, /vteximg/i] },
+    { name: 'Squarespace', patterns: [/static1\.squarespace\.com/i, /sqsp\.com/i, /squarespace-sys/i] },
+    { name: 'PrestaShop', patterns: [/prestashop\.js/i, /themes\/prestashop/i] },
+    { name: 'Magento', patterns: [/mage\/cookies/i, /js\/magento/i] },
+    { name: 'Empretienda', patterns: [/cdn\.empretienda\.com/i, /empretienda\.com\.ar/i] },
+    { name: 'Webflow', patterns: [/uploads-ssl\.webflow\.com/i, /data-wf-page/i, /data-wf-site/i, /webflow\.js/i] },
+    { name: 'Vtex', patterns: [/vtex\.com\.br/i, /vteximg/i, /vtex-assets/i] },
 ];
 
 // Tool/integration patterns
