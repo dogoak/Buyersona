@@ -275,7 +275,7 @@ export default function ReportsList() {
             <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-8 sm:mb-10">
                 <button
                     onClick={() => navigate('/onboarding')}
-                    className="group relative bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-2xl p-3 sm:p-6 flex flex-col items-center sm:items-start justify-center sm:justify-start text-center sm:text-left hover:shadow-xl hover:shadow-indigo-200 transition-all transform hover:-translate-y-1 overflow-hidden aspect-square sm:aspect-auto"
+                    className="group relative bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-2xl p-3 sm:p-6 flex flex-col items-center sm:items-start justify-center sm:justify-start text-center sm:text-left hover:shadow-xl hover:shadow-indigo-200 transition-all duration-200 ease-out transform hover:-translate-y-0.5 active:scale-[0.98] active:translate-y-0 overflow-hidden aspect-square sm:aspect-auto"
                 >
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 hidden sm:block"></div>
                     <div className="relative flex flex-col items-center sm:items-start w-full">
@@ -293,7 +293,7 @@ export default function ReportsList() {
                         if (firstBiz) { navigate(`/deep-dive/new/${firstBiz.id}`); }
                         else navigate('/onboarding');
                     }}
-                    className="group bg-white rounded-2xl p-3 sm:p-6 border border-slate-200 flex flex-col items-center sm:items-start justify-center sm:justify-start text-center sm:text-left hover:border-violet-200 hover:shadow-md transition-all transform hover:-translate-y-0.5 aspect-square sm:aspect-auto"
+                    className="group bg-white rounded-2xl p-3 sm:p-6 border border-slate-200 flex flex-col items-center sm:items-start justify-center sm:justify-start text-center sm:text-left hover:border-violet-200 hover:shadow-md transition-all duration-200 ease-out transform hover:-translate-y-0.5 active:scale-[0.98] active:translate-y-0 aspect-square sm:aspect-auto"
                 >
                     <div className="w-10 h-10 sm:w-12 sm:h-12 bg-violet-50 rounded-xl flex items-center justify-center mb-2 sm:mb-4 group-hover:scale-105 transition-transform">
                         <Search className="w-5 h-5 sm:w-6 sm:h-6 text-violet-600" />
@@ -308,7 +308,7 @@ export default function ReportsList() {
                         if (firstBiz) { navigate(`/digital-audit/new/${firstBiz.id}`); }
                         else navigate('/onboarding');
                     }}
-                    className="group bg-white rounded-2xl p-3 sm:p-6 border border-slate-200 flex flex-col items-center sm:items-start justify-center sm:justify-start text-center sm:text-left hover:border-emerald-200 hover:shadow-md transition-all transform hover:-translate-y-0.5 aspect-square sm:aspect-auto"
+                    className="group bg-white rounded-2xl p-3 sm:p-6 border border-slate-200 flex flex-col items-center sm:items-start justify-center sm:justify-start text-center sm:text-left hover:border-emerald-200 hover:shadow-md transition-all duration-200 ease-out transform hover:-translate-y-0.5 active:scale-[0.98] active:translate-y-0 aspect-square sm:aspect-auto"
                 >
                     <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-50 rounded-xl flex items-center justify-center mb-2 sm:mb-4 group-hover:scale-105 transition-transform">
                         <Globe className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
@@ -352,7 +352,7 @@ export default function ReportsList() {
                         </p>
                         <button
                             onClick={() => navigate('/onboarding')}
-                            className="group inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-10 py-4 rounded-2xl font-bold text-lg hover:shadow-xl hover:shadow-indigo-200 transition-all transform hover:-translate-y-1"
+                            className="group inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-10 py-4 rounded-2xl font-bold text-lg hover:shadow-xl hover:shadow-indigo-200 transition-all duration-200 ease-out transform hover:-translate-y-0.5 active:scale-[0.98]"
                         >
                             Crear mi primer análisis
                             <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
@@ -377,25 +377,35 @@ export default function ReportsList() {
                             const statusConfig = getStatusConfig(report);
                             const StatusIcon = statusConfig.icon;
                             const isClickable = report.status === 'completed' || report.status === 'draft';
+                            const handleCardAction = () => {
+                                if (report.status === 'completed') {
+                                    if (report.type === 'product') navigate(`/deep-dive/report/${report.id}`);
+                                    else if (report.type === 'digital_audit') navigate(`/digital-audit/report/${report.id}`);
+                                    else navigate(`/dashboard/report/${report.id}`);
+                                }
+                                if (report.status === 'draft') {
+                                    if (report.type === 'product') navigate(`/deep-dive/checkout/${report.id}`);
+                                    else if (report.type === 'digital_audit') navigate(`/digital-audit/checkout/${report.id}`);
+                                    else if (report.current_step >= 6) navigate(`/checkout/${report.id}`);
+                                    else navigate(`/onboarding/${report.id}`);
+                                }
+                            };
 
                             return (
                                 <div
                                     key={report.id}
-                                    onClick={() => {
-                                        if (report.status === 'completed') {
-                                            if (report.type === 'product') navigate(`/deep-dive/report/${report.id}`);
-                                            else if (report.type === 'digital_audit') navigate(`/digital-audit/report/${report.id}`);
-                                            else navigate(`/dashboard/report/${report.id}`);
-                                        }
-                                        if (report.status === 'draft') {
-                                            if (report.type === 'product') navigate(`/deep-dive/checkout/${report.id}`);
-                                            else if (report.type === 'digital_audit') navigate(`/digital-audit/checkout/${report.id}`);
-                                            else if (report.current_step >= 6) navigate(`/checkout/${report.id}`);
-                                            else navigate(`/onboarding/${report.id}`);
+                                    onClick={handleCardAction}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            handleCardAction();
                                         }
                                     }}
-                                    className={`bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 transition-all group ${isClickable
-                                        ? 'hover:shadow-lg hover:border-indigo-200 cursor-pointer hover:-translate-y-0.5 transform'
+                                    role={isClickable ? 'button' : undefined}
+                                    tabIndex={isClickable ? 0 : undefined}
+                                    aria-label={isClickable ? `Ver reporte de ${report.business_name}` : undefined}
+                                    className={`bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 transition-all duration-200 ease-out group focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${isClickable
+                                        ? 'hover:shadow-lg hover:border-indigo-200 cursor-pointer hover:-translate-y-0.5 transform active:scale-[0.99] active:translate-y-0'
                                         : ''
                                         }`}
                                 >
@@ -435,7 +445,7 @@ export default function ReportsList() {
                                                             else if (report.type === 'digital_audit') navigate(`/digital-audit/report/${report.id}`);
                                                             else navigate(`/dashboard/report/${report.id}`);
                                                         }}
-                                                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition ${report.type === 'product'
+                                                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ease-out active:scale-95 ${report.type === 'product'
                                                             ? 'bg-violet-50 text-violet-700 hover:bg-violet-100'
                                                             : report.type === 'digital_audit'
                                                                 ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
@@ -448,7 +458,7 @@ export default function ReportsList() {
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); setServicesModalReportId(report.id); setServicesModalOpen(true); }}
                                                             title="Análisis Avanzados"
-                                                            className="relative flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-violet-50 to-emerald-50 text-indigo-600 rounded-lg text-sm font-semibold hover:shadow-md transition border border-indigo-100"
+                                                            className="relative flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-violet-50 to-emerald-50 text-indigo-600 rounded-lg text-sm font-semibold hover:shadow-md transition-all duration-200 ease-out active:scale-95 border border-indigo-100"
                                                         >
                                                             <Zap size={14} /> Más Análisis
                                                         </button>
@@ -456,14 +466,14 @@ export default function ReportsList() {
                                                     <button
                                                         onClick={(e) => e.stopPropagation()}
                                                         title="Compartir"
-                                                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                                                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors duration-200 active:scale-90"
                                                     >
                                                         <Share2 size={15} />
                                                     </button>
                                                     <button
                                                         onClick={(e) => e.stopPropagation()}
                                                         title="Descargar PDF"
-                                                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                                                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors duration-200 active:scale-90"
                                                     >
                                                         <Download size={15} />
                                                     </button>
@@ -477,7 +487,7 @@ export default function ReportsList() {
                                                             if (report.type === 'product') navigate(`/deep-dive/checkout/${report.id}`);
                                                             else navigate(`/checkout/${report.id}`);
                                                         }}
-                                                        className={`flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-sm font-bold hover:shadow-lg transition ${report.type === 'product' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600' : 'bg-gradient-to-r from-indigo-600 to-violet-600'
+                                                        className={`flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-sm font-bold hover:shadow-lg transition-all duration-200 ease-out active:scale-[0.98] ${report.type === 'product' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600' : 'bg-gradient-to-r from-indigo-600 to-violet-600'
                                                             }`}
                                                     >
                                                         <CreditCard size={14} /> Pagar
@@ -485,7 +495,7 @@ export default function ReportsList() {
                                                 ) : (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); navigate(`/onboarding/${report.id}`); }}
-                                                        className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-700 rounded-lg text-sm font-bold hover:shadow-lg transition border border-amber-200"
+                                                        className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-700 rounded-lg text-sm font-bold hover:shadow-lg transition-all duration-200 ease-out active:scale-[0.98] border border-amber-200"
                                                     >
                                                         <FileText size={14} /> Retomar
                                                     </button>
@@ -527,7 +537,7 @@ export default function ReportsList() {
                                                             setPayingVoluntary(null);
                                                         }
                                                     }}
-                                                    className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white rounded-lg text-xs font-bold hover:shadow-lg transition disabled:opacity-70"
+                                                    className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white rounded-lg text-xs font-bold hover:shadow-lg transition-all duration-200 ease-out active:scale-[0.98] disabled:opacity-70"
                                                 >
                                                     {payingVoluntary === report.id ? (
                                                         <><Loader2 size={12} className="animate-spin" /> Procesando...</>
