@@ -1,8 +1,16 @@
 
 import { callGeminiProxy } from './geminiProxyClient';
-import { GoogleGenAI, Type } from "@google/genai";
 import { DigitalAuditInput, DigitalPreScanResult, DigitalAuditResult, StrategicAnalysis, Language, InstagramScrapeResult, GoogleMapsScrapeResult, FacebookScrapeResult, TikTokScrapeResult, XScrapeResult, LinkedInScrapeResult, YouTubeScrapeResult, PinterestScrapeResult, MetaAdsScrapeResult, MercadoLibreScrapeResult, GoogleSerpResult } from "../types";
 import { supabase } from './supabaseClient';
+
+const Type = {
+  OBJECT: 'OBJECT',
+  ARRAY: 'ARRAY',
+  STRING: 'STRING',
+  NUMBER: 'NUMBER',
+  BOOLEAN: 'BOOLEAN',
+  INTEGER: 'INTEGER',
+} as const;
 
 
 // ── Web Scraper: Extracts real data from HTML ────────────────────────
@@ -1966,18 +1974,8 @@ export const analyzeDigitalAudit = async (
     `;
 
 
-    // WARNING: We must call Gemini directly here because the proxy edge function has a 10s timeout
-    // which this massive payload easily exceeds during the 'thinking' phase.
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    if (!apiKey) {
-        throw new Error("VITE_GEMINI_API_KEY is not defined.");
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-    
-    // We must use gemini-3.1-pro-preview for advanced reasoning (defaulting to it if modelName isn't set properly)
-    // Though modelName is passed in from the component
-    const response = await ai.models.generateContent({
+    const response = await callGeminiProxy({
+        action: 'analyze_digital_audit',
         model: modelName,
         contents: prompt,
         config: {
@@ -2000,13 +1998,13 @@ export const analyzeDigitalAudit = async (
                 ((response.usageMetadata.candidatesTokenCount || 0) * outputTokenPriceUsd);
         } else {
             const estimatedPromptTokens = prompt.length / 4;
-            const estimatedResponseTokens = response.text ? response.text.length / 4 : 8000;
+            const estimatedResponseTokens = response.text.length / 4;
             costUsd = (estimatedPromptTokens * inputTokenPriceUsd) + (estimatedResponseTokens * outputTokenPriceUsd);
         }
 
         return { result: parsedResult, costUsd };
     } catch (e) {
-        console.error("JSON Parse Error", response.text?.substring(0, 500));
+        console.error("JSON Parse Error", response.text.substring(0, 500));
         throw new Error("Invalid response format from AI for Digital Audit.");
     }
 };

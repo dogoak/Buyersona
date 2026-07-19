@@ -1,39 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Auth/Login';
-import DashboardLayout from './components/Dashboard/DashboardLayout';
-import ReportsList from './components/Dashboard/ReportsList';
-import ReportView from './components/Dashboard/ReportView';
-import BillingPage from './components/Dashboard/BillingPage';
-import DashboardProspector from './components/Prospector/DashboardProspector';
-import WizardCampaign from './components/Prospector/WizardCampaign';
-import CheckoutProspector from './components/Prospector/CheckoutProspector';
-import CampaignLoader from './components/Prospector/CampaignLoader';
-import CampaignView from './components/Prospector/CampaignView';
-import SettingsPage from './components/Dashboard/SettingsPage';
-import CheckoutPage from './components/Checkout/CheckoutPage';
 import PaymentResult from './components/Checkout/PaymentResult';
-import ResumeCheckout from './components/Checkout/ResumeCheckout';
-import DeepDivePage from './components/DeepDivePage';
-import DeepDiveCheckout from './components/Checkout/DeepDiveCheckout';
-import DigitalAuditCheckout from './components/Checkout/DigitalAuditCheckout';
-import DeepDiveView from './components/Dashboard/DeepDiveView';
-import DigitalAuditPage from './components/DigitalAuditPage';
-import DigitalAuditView from './components/Dashboard/DigitalAuditView';
 import PrivacyPolicy from './components/Legal/PrivacyPolicy';
 import TermsOfService from './components/Legal/TermsOfService';
 import Onboarding from './components/Onboarding';
 import { LandingPage } from './components/LandingPage';
-import { Dashboard } from './components/Dashboard';
 import AppHeader from './components/AppHeader';
 import AdminRoute from './components/AdminRoute';
-import SuperAdminDashboard from './components/SuperAdmin/SuperAdminDashboard';
-import AnalysisLoader from './components/AnalysisLoader';
 import ReloadPrompt from './components/ReloadPrompt';
 import { Language, BusinessInput, StrategicAnalysis } from './types';
 import { analyzeBusinessGrowth } from './services/geminiService';
 import { supabase } from './services/supabaseClient';
+
+// Lazy load heavy components for better initial load performance
+const DashboardLayout = lazy(() => import('./components/Dashboard/DashboardLayout'));
+const ReportsList = lazy(() => import('./components/Dashboard/ReportsList'));
+const ReportView = lazy(() => import('./components/Dashboard/ReportView'));
+const BillingPage = lazy(() => import('./components/Dashboard/BillingPage'));
+const DashboardProspector = lazy(() => import('./components/Prospector/DashboardProspector'));
+const WizardCampaign = lazy(() => import('./components/Prospector/WizardCampaign'));
+const CheckoutProspector = lazy(() => import('./components/Prospector/CheckoutProspector'));
+const CampaignLoader = lazy(() => import('./components/Prospector/CampaignLoader'));
+const CampaignView = lazy(() => import('./components/Prospector/CampaignView'));
+const SettingsPage = lazy(() => import('./components/Dashboard/SettingsPage'));
+const CheckoutPage = lazy(() => import('./components/Checkout/CheckoutPage'));
+const ResumeCheckout = lazy(() => import('./components/Checkout/ResumeCheckout'));
+const DeepDivePage = lazy(() => import('./components/DeepDivePage'));
+const DeepDiveCheckout = lazy(() => import('./components/Checkout/DeepDiveCheckout'));
+const DigitalAuditCheckout = lazy(() => import('./components/Checkout/DigitalAuditCheckout'));
+const DeepDiveView = lazy(() => import('./components/Dashboard/DeepDiveView'));
+const DigitalAuditPage = lazy(() => import('./components/DigitalAuditPage'));
+const DigitalAuditView = lazy(() => import('./components/Dashboard/DigitalAuditView'));
+const SuperAdminDashboard = lazy(() => import('./components/SuperAdmin/SuperAdminDashboard'));
+const AnalysisLoader = lazy(() => import('./components/AnalysisLoader'));
+const Dashboard = lazy(() => import('./components/Dashboard').then(module => ({ default: module.Dashboard })));
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -307,99 +309,108 @@ function App() {
         {/* Global Header - hides on landing and login pages */}
         <AppHeader lang={lang} setLang={setLang} />
 
-        <Routes>
-          <Route path="/login" element={<Login />} />
+        <Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center bg-slate-50">
+            <div className="flex flex-col items-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-indigo-600 mb-4"></div>
+              <p className="text-slate-500 font-medium">Cargando...</p>
+            </div>
+          </div>
+        }>
+          <Routes>
+            <Route path="/login" element={<Login />} />
 
-          {/* User Dashboard Routes */}
-          <Route path="/dashboard" element={
-            <PrivateRoute>
-              <DashboardLayout />
-            </PrivateRoute>
-          }>
-            <Route index element={<ReportsList />} />
-            <Route path="report/:reportId" element={<ReportView lang={lang} />} />
-            <Route path="billing" element={<BillingPage />} />
-            <Route path="prospector/dashboard" element={<DashboardProspector />} />
-            <Route path="prospector/new" element={<WizardCampaign />} />
-            <Route path="prospector/checkout/:campaignId" element={<CheckoutProspector />} />
-            <Route path="prospector/loader/:campaignId" element={<CampaignLoader />} />
-            <Route path="prospector/view/:campaignId" element={<CampaignView />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="payment/success" element={<PaymentResult status="success" />} />
-            <Route path="payment/failure" element={<PaymentResult status="failure" />} />
-            <Route path="payment/pending" element={<PaymentResult status="pending" />} />
-          </Route>
+            {/* User Dashboard Routes */}
+            <Route path="/dashboard" element={
+              <PrivateRoute>
+                <DashboardLayout />
+              </PrivateRoute>
+            }>
+              <Route index element={<ReportsList />} />
+              <Route path="report/:reportId" element={<ReportView lang={lang} />} />
+              <Route path="billing" element={<BillingPage />} />
+              <Route path="prospector/dashboard" element={<DashboardProspector />} />
+              <Route path="prospector/new" element={<WizardCampaign />} />
+              <Route path="prospector/checkout/:campaignId" element={<CheckoutProspector />} />
+              <Route path="prospector/loader/:campaignId" element={<CampaignLoader />} />
+              <Route path="prospector/view/:campaignId" element={<CampaignView />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="payment/success" element={<PaymentResult status="success" />} />
+              <Route path="payment/failure" element={<PaymentResult status="failure" />} />
+              <Route path="payment/pending" element={<PaymentResult status="pending" />} />
+            </Route>
 
-          {/* Onboarding + Checkout + Analysis Flow (requires auth) */}
-          <Route path="/onboarding" element={
-            <PrivateRoute>
-              <OnboardingPage lang={lang} />
-            </PrivateRoute>
-          } />
+            {/* Onboarding + Checkout + Analysis Flow (requires auth) */}
+            <Route path="/onboarding" element={
+              <PrivateRoute>
+                <OnboardingPage lang={lang} />
+              </PrivateRoute>
+            } />
 
-          <Route path="/onboarding/:reportId" element={
-            <PrivateRoute>
-              <OnboardingPage lang={lang} />
-            </PrivateRoute>
-          } />
+            <Route path="/onboarding/:reportId" element={
+              <PrivateRoute>
+                <OnboardingPage lang={lang} />
+              </PrivateRoute>
+            } />
 
-          {/* Resume checkout for draft reports */}
-          <Route path="/checkout/:reportId" element={
-            <PrivateRoute>
-              <ResumeCheckout />
-            </PrivateRoute>
-          } />
+            {/* Resume checkout for draft reports */}
+            <Route path="/checkout/:reportId" element={
+              <PrivateRoute>
+                <ResumeCheckout />
+              </PrivateRoute>
+            } />
 
-          {/* Deep Dive Routes */}
-          <Route path="/deep-dive/new/:reportId" element={
-            <PrivateRoute>
-              <DeepDivePage lang={lang} setLang={setLang} />
-            </PrivateRoute>
-          } />
+            {/* Deep Dive Routes */}
+            <Route path="/deep-dive/new/:reportId" element={
+              <PrivateRoute>
+                <DeepDivePage lang={lang} setLang={setLang} />
+              </PrivateRoute>
+            } />
 
-          <Route path="/deep-dive/checkout/:analysisId" element={
-            <PrivateRoute>
-              <DeepDiveCheckout />
-            </PrivateRoute>
-          } />
+            <Route path="/deep-dive/checkout/:analysisId" element={
+              <PrivateRoute>
+                <DeepDiveCheckout />
+              </PrivateRoute>
+            } />
 
-          <Route path="/deep-dive/report/:reportId" element={
-            <PrivateRoute>
-              <DeepDiveView />
-            </PrivateRoute>
-          } />
+            <Route path="/deep-dive/report/:reportId" element={
+              <PrivateRoute>
+                <DeepDiveView />
+              </PrivateRoute>
+            } />
 
-          {/* Digital Audit Routes */}
-          <Route path="/digital-audit/new/:reportId" element={
-            <PrivateRoute>
-              <DigitalAuditPage lang={lang} setLang={setLang} />
-            </PrivateRoute>
-          } />
+            {/* Digital Audit Routes */}
+            <Route path="/digital-audit/new/:reportId" element={
+              <PrivateRoute>
+                <DigitalAuditPage lang={lang} setLang={setLang} />
+              </PrivateRoute>
+            } />
 
-          <Route path="/digital-audit/checkout/:auditId" element={
-            <PrivateRoute>
-              <DigitalAuditCheckout />
-            </PrivateRoute>
-          } />
+            <Route path="/digital-audit/checkout/:auditId" element={
+              <PrivateRoute>
+                <DigitalAuditCheckout />
+              </PrivateRoute>
+            } />
 
-          <Route path="/digital-audit/report/:reportId" element={
-            <PrivateRoute>
-              <DigitalAuditView />
-            </PrivateRoute>
-          } />
+            <Route path="/digital-audit/report/:reportId" element={
+              <PrivateRoute>
+                <DigitalAuditView />
+              </PrivateRoute>
+            } />
 
-          {/* Super Admin Routes */}
-          <Route path="/super-admin" element={<AdminRoute />}>
-            <Route index element={<SuperAdminDashboard />} />
-          </Route>
+            {/* Super Admin Routes */}
+            <Route path="/super-admin" element={<AdminRoute />}>
+              <Route index element={<SuperAdminDashboard />} />
+            </Route>
 
-          {/* Legal Pages */}
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/terms" element={<TermsOfService />} />
+            {/* Legal Pages */}
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfService />} />
 
-          {/* Landing Page */}
-          <Route path="/" element={<LandingPageWrapper lang={lang} setLang={setLang} />} />
-        </Routes>
+            {/* Landing Page */}
+            <Route path="/" element={<LandingPageWrapper lang={lang} setLang={setLang} />} />
+          </Routes>
+        </Suspense>
         <ReloadPrompt />
       </AuthProvider>
     </BrowserRouter>
