@@ -6,12 +6,12 @@
     <changefreq>weekly</changefreq>
   </url>
   <url>
-    <loc>https://buyersona.com/terms.html</loc>
+    <loc>https://buyersona.com/terms</loc>
     <priority>0.5</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://buyersona.com/privacy.html</loc>
+    <loc>https://buyersona.com/privacy</loc>
     <priority>0.5</priority>
     <changefreq>monthly</changefreq>
   </url>

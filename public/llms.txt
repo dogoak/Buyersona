@@ -1,0 +1,27 @@
+# Buyersona
+
+Buyersona es una plataforma SaaS de análisis de clientes ideales (Buyer Personas), competencia y estrategias de adquisición digital impulsada por Inteligencia Artificial (Google Gemini).
+
+## Información General
+- **Sitio Web:** https://buyersona.com
+- **Propósito:** Ayudar a fundadores, equipos de marketing y agencias B2B/B2C a identificar con precisión a su cliente ideal, optimizar sus canales de adquisición y auditar su presencia digital sin procesos costosos de consultoría tradicional.
+
+## Productos y Características principales
+1. **Informe de Buyer Persona (Análisis Estratégico):**
+   - Análisis de dolores, deseos y barreras de compra de tres perfiles de cliente ideal.
+   - Selección de los 3 canales de adquisición más rentables.
+   - Identificación de competidores directos/indirectos y ventajas competitivas.
+   - Redacción de mensajes publicitarios específicos para cada Buyer Persona.
+2. **Deep Dive (Estudio de Producto y Ventas):**
+   - Mapa conductual detallado de toma de decisiones.
+   - Matriz de objeciones y contra-argumentos de venta.
+   - Discurso de venta (pitch) optimizado.
+3. **Auditoría Digital:**
+   - Diagnóstico SEO básico, seguridad SSL y presencia digital general.
+   - Análisis de reputación digital y conversión en web.
+   - Recomendaciones concretas de marketing en redes sociales.
+
+## Precios
+- **Informe Inicial (Buyer Persona):** $25.000 ARS (pago único) / Prueba gratuita disponible para pruebas locales de negocio.
+- **Deep Dive (Estudio de Producto):** $12.500 ARS (pago único).
+- **Prospector Campañas:** $35.000 ARS (pago único).
