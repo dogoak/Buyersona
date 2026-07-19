@@ -12,6 +12,7 @@ import {
 import { analyzeDigitalAudit } from '../../services/digitalAuditService';
 import GlossaryModal from '../GlossaryModal';
 import FeedbackModal from '../FeedbackModal';
+import { FullLogo } from '../BrandAssets';
 import type {
     DigitalAuditResult, DigitalAuditInput, StrategicAnalysis,
     SocialMediaChannelAudit, CompetitorDigitalBenchmark,
@@ -227,7 +228,12 @@ const safeResult = (raw: any): DigitalAuditResult => {
     } as DigitalAuditResult;
 };
 
-export default function DigitalAuditView() {
+interface DigitalAuditViewProps {
+    isShared?: boolean;
+}
+
+export default function DigitalAuditView({ isShared: propIsShared = false }: DigitalAuditViewProps) {
+    const isShared = propIsShared || window.location.pathname.includes('/shared/');
     const { reportId } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -243,7 +249,7 @@ export default function DigitalAuditView() {
     const generationLock = useRef(false);
 
     useEffect(() => {
-        if (!user || !reportId) return;
+        if ((!user && !isShared) || !reportId) return;
 
         const fetchOrGenerate = async () => {
             try {
@@ -580,13 +586,36 @@ export default function DigitalAuditView() {
             {/* Print styles override for light background */}
             <style>{`@media print { .bg-slate-950 { background: white !important; } .text-white { color: #1e293b !important; } .text-slate-300, .text-slate-400, .text-slate-500 { color: #475569 !important; } .bg-slate-900\\/80, .bg-slate-900 { background: #f8fafc !important; border: 1px solid #e2e8f0 !important; } .border-white\\/10 { border-color: #e2e8f0 !important; } }`}</style>
 
+            {isShared && (
+                <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 sticky top-0 z-50 print:hidden shadow-lg backdrop-blur-md bg-opacity-95">
+                    <div className="max-w-7xl mx-auto flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <FullLogo className="h-8 w-auto text-white" />
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <span className="text-slate-400 text-sm hidden md:inline font-medium">¿Querés crear una auditoría digital completa como esta para tu negocio?</span>
+                            <button
+                                onClick={() => navigate('/')}
+                                className="bg-gradient-to-r from-indigo-500 to-violet-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:shadow-xl hover:shadow-indigo-500/20 hover:-translate-y-0.5 active:scale-95 transform transition-all duration-200"
+                            >
+                                Crear mi reporte gratis
+                            </button>
+                        </div>
+                    </div>
+                </header>
+            )}
+
             <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 space-y-8">
                 {/* ── TOP BAR ────────────────────────────────────────────── */}
                 <div className="flex items-center justify-between print:hidden">
-                    <button onClick={() => navigate('/dashboard')} className="group inline-flex items-center gap-2 text-sm font-semibold text-slate-400 hover:text-white transition">
-                        <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-                        Volver al Dashboard
-                    </button>
+                    {!isShared ? (
+                        <button onClick={() => navigate('/dashboard')} className="group inline-flex items-center gap-2 text-sm font-semibold text-slate-400 hover:text-white transition">
+                            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+                            Volver al Dashboard
+                        </button>
+                    ) : (
+                        <div />
+                    )}
                     <button onClick={() => window.print()} className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-sm font-semibold border border-white/10 hover:bg-slate-700 hover:text-white transition">
                         <Download size={14} /> Descargar PDF
                     </button>
@@ -1541,9 +1570,30 @@ export default function DigitalAuditView() {
                 </div>
 
                 {/* ── FEEDBACK + GLOSSARY ─────────────────────────────────── */}
-                <div className="mt-8 print:hidden">
-                    <FeedbackModal deepDiveId={reportId} reportType="digital_audit" userId={user!.id} lang={lang} />
-                </div>
+                {!isShared && (
+                    <div className="mt-8 print:hidden">
+                        <FeedbackModal deepDiveId={reportId} reportType="digital_audit" userId={user!.id} lang={lang} />
+                    </div>
+                )}
+
+                {/* Bottom Branded CTA Banner for Shared Public Views */}
+                {isShared && (
+                    <div className="bg-slate-900 text-white border border-slate-800 px-6 py-12 text-center print:hidden relative overflow-hidden mt-12 rounded-[2.5rem] w-full">
+                        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
+                        <div className="relative z-10 max-w-xl mx-auto">
+                            <h3 className="text-2xl font-black mb-3">¿Tu negocio está listo para el siguiente nivel?</h3>
+                            <p className="text-slate-400 mb-8 leading-relaxed font-light">
+                                Generá tu propio informe estratégico completo y una auditoría SEO, AEO, GBP y de rendimiento web detallada en solo 10 minutos.
+                            </p>
+                            <button
+                                onClick={() => navigate('/')}
+                                className="bg-gradient-to-r from-indigo-500 to-violet-500 text-white px-8 py-3.5 rounded-2xl font-bold text-base hover:shadow-xl hover:shadow-indigo-500/20 hover:-translate-y-0.5 active:scale-95 transform transition-all duration-200"
+                            >
+                                Crear auditoría de mi negocio gratis
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 <GlossaryModal lang={lang as any} />
             </main>

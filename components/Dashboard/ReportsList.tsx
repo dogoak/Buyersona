@@ -48,10 +48,10 @@ export default function ReportsList() {
 
     const getReportUrl = (report: Report) => {
         const path = report.type === 'product'
-            ? `/deep-dive/report/${report.id}`
+            ? `/shared/deep-dive/${report.id}`
             : report.type === 'digital_audit'
-                ? `/digital-audit/report/${report.id}`
-                : `/dashboard/report/${report.id}`;
+                ? `/shared/digital-audit/${report.id}`
+                : `/shared/report/${report.id}`;
         return window.location.origin + path;
     };
 

@@ -407,6 +407,11 @@ function App() {
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsOfService />} />
 
+            {/* Public Shared Report Routes */}
+            <Route path="/shared/report/:reportId" element={<ReportView lang={lang} isShared={true} />} />
+            <Route path="/shared/deep-dive/:reportId" element={<DeepDiveView isShared={true} />} />
+            <Route path="/shared/digital-audit/:reportId" element={<DigitalAuditView isShared={true} />} />
+
             {/* Landing Page */}
             <Route path="/" element={<LandingPageWrapper lang={lang} setLang={setLang} />} />
           </Routes>

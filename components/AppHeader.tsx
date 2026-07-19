@@ -49,6 +49,8 @@ export default function AppHeader({ lang, setLang }: AppHeaderProps) {
     if (location.pathname === '/') return null;
     // Don't show on login page
     if (location.pathname === '/login') return null;
+    // Don't show on public shared pages
+    if (location.pathname.startsWith('/shared/')) return null;
 
     const handleSignOut = async () => {
         try {

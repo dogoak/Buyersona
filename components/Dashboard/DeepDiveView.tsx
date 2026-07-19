@@ -18,13 +18,19 @@ import ProfundizarPanel from '../ProfundizarPanel';
 import GlossaryModal from '../GlossaryModal';
 import FeedbackModal from '../FeedbackModal';
 import EnrichmentCards from './EnrichmentCards';
+import { FullLogo } from '../BrandAssets';
 import type {
     DeepDiveResult, DeepDivePersona, ObjectionHandling, CompetitorAnalysis,
     SalesSurvivalKit, DeepDiveExecutionStep, PricingStrategy, UnitEconomics,
     ContentCalendarDay, StrategicAnalysis, DeepDiveInput, SeasonalityInsight, QuickWin, SocialListening
 } from '../../types';
 
-export default function DeepDiveView() {
+interface DeepDiveViewProps {
+    isShared?: boolean;
+}
+
+export default function DeepDiveView({ isShared: propIsShared = false }: DeepDiveViewProps) {
+    const isShared = propIsShared || window.location.pathname.includes('/shared/');
     const { reportId } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -41,7 +47,7 @@ export default function DeepDiveView() {
     const [profundizarSection, setProfundizarSection] = useState({ title: '', content: '' });
 
     useEffect(() => {
-        if (!user || !reportId) return;
+        if ((!user && !isShared) || !reportId) return;
 
         const fetchOrGenerate = async () => {
             try {
@@ -286,18 +292,38 @@ export default function DeepDiveView() {
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
+            {isShared && (
+                <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 sticky top-0 z-50 print:hidden shadow-lg backdrop-blur-md bg-opacity-95">
+                    <div className="max-w-7xl mx-auto flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <FullLogo className="h-8 w-auto text-white" />
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <span className="text-slate-400 text-sm hidden md:inline font-medium">¿Querés crear un análisis de producto como este para tu negocio?</span>
+                            <button
+                                onClick={() => navigate('/')}
+                                className="bg-gradient-to-r from-indigo-500 to-violet-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:shadow-xl hover:shadow-indigo-500/20 hover:-translate-y-0.5 active:scale-95 transform transition-all duration-200"
+                            >
+                                Crear mi reporte gratis
+                            </button>
+                        </div>
+                    </div>
+                </header>
+            )}
 
             <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
                 {/* Header Section */}
                 <div>
-                    <button
-                        onClick={() => navigate('/dashboard')}
-                        className="group inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-800 transition mb-6"
-                    >
-                        <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-                        {lang === 'es' ? 'Volver al Dashboard' : 'Back to Dashboard'}
-                    </button>
+                    {!isShared && (
+                        <button
+                            onClick={() => navigate('/dashboard')}
+                            className="group inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-800 transition mb-6"
+                        >
+                            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+                            {lang === 'es' ? 'Volver al Dashboard' : 'Back to Dashboard'}
+                        </button>
+                    )}
                     <div className="flex justify-end mb-4 print:hidden">
                         <button
                             onClick={() => window.print()}
@@ -409,7 +435,7 @@ export default function DeepDiveView() {
                                 setProfundizarSection({ title: tabLabel, content: contentMap[activeTab] || '' });
                                 setProfundizarOpen(true);
                             }}
-                            className="inline-flex items-center gap-2 px-6 py-3 bg-violet-50 text-violet-700 border border-violet-200 rounded-xl font-bold text-sm hover:bg-violet-100 hover:shadow transition-all"
+                            className={isShared ? "hidden" : "inline-flex items-center gap-2 px-6 py-3 bg-violet-50 text-violet-700 border border-violet-200 rounded-xl font-bold text-sm hover:bg-violet-100 hover:shadow transition-all"}
                         >
                             <Sparkles size={16} />
                             {lang === 'es' ? 'Profundizar esta sección' : 'Deep dive this section'}
@@ -417,27 +443,50 @@ export default function DeepDiveView() {
                     </div>
 
                     {/* Feedback trigger */}
-                    <div className="mt-8 print:hidden">
-                        <FeedbackModal
-                            deepDiveId={reportId}
-                            reportType="deepdive"
-                            userId={user!.id}
-                            lang={lang}
-                        />
-                    </div>
+                    {!isShared && (
+                        <div className="mt-8 print:hidden">
+                            <FeedbackModal
+                                deepDiveId={reportId}
+                                reportType="deepdive"
+                                userId={user!.id}
+                                lang={lang}
+                            />
+                        </div>
+                    )}
                 </div>
 
+                {/* Bottom Branded CTA Banner for Shared Public Views */}
+                {isShared && (
+                    <div className="bg-slate-900 text-white border-t border-slate-800 px-6 py-12 text-center print:hidden relative overflow-hidden mt-12 rounded-[2.5rem] w-full">
+                        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
+                        <div className="relative z-10 max-w-xl mx-auto">
+                            <h3 className="text-2xl font-black mb-3">¿Tu negocio está listo para el siguiente nivel?</h3>
+                            <p className="text-slate-400 mb-8 leading-relaxed">
+                                Generá tu propio informe táctico completo con kit de ventas, calendario de contenidos, análisis de competidores y unit economics en solo 10 minutos.
+                            </p>
+                            <button
+                                onClick={() => navigate('/')}
+                                className="bg-gradient-to-r from-indigo-500 to-violet-500 text-white px-8 py-3.5 rounded-2xl font-bold text-base hover:shadow-xl hover:shadow-indigo-500/20 hover:-translate-y-0.5 active:scale-95 transform transition-all duration-200"
+                            >
+                                Crear análisis de mi producto gratis
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* ProfundizarPanel */}
-                <ProfundizarPanel
-                    isOpen={profundizarOpen}
-                    onClose={() => setProfundizarOpen(false)}
-                    sectionTitle={profundizarSection.title}
-                    sectionContent={profundizarSection.content}
-                    reportContext={`Producto: ${productName}. Resumen: ${result.summary?.slice(0, 500) || ''}`}
-                    reportId={reportId || ''}
-                    reportType="product"
-                    lang={lang as any}
-                />
+                {!isShared && (
+                    <ProfundizarPanel
+                        isOpen={profundizarOpen}
+                        onClose={() => setProfundizarOpen(false)}
+                        sectionTitle={profundizarSection.title}
+                        sectionContent={profundizarSection.content}
+                        reportContext={`Producto: ${productName}. Resumen: ${result.summary?.slice(0, 500) || ''}`}
+                        reportId={reportId || ''}
+                        reportType="product"
+                        lang={lang as any}
+                    />
+                )}
 
                 <GlossaryModal lang={lang as any} />
 

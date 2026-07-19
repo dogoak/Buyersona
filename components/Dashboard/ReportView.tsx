@@ -12,12 +12,15 @@ import GlossaryModal from '../GlossaryModal';
 import FeedbackModal from '../FeedbackModal';
 import ServicesModal from '../ServicesModal';
 import EnrichmentCards from './EnrichmentCards';
+import { FullLogo } from '../BrandAssets';
 
 interface ReportViewProps {
     lang: Language;
+    isShared?: boolean;
 }
 
-export default function ReportView({ lang }: ReportViewProps) {
+export default function ReportView({ lang, isShared: propIsShared = false }: ReportViewProps) {
+    const isShared = propIsShared || window.location.pathname.includes('/shared/');
     const { reportId } = useParams();
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -233,53 +236,75 @@ export default function ReportView({ lang }: ReportViewProps) {
     if (report.status === 'completed' && report.analysis_result) {
         return (
             <div>
-                {/* Back button bar - hidden when printing */}
-                <div className="bg-white border-b border-slate-200 px-4 py-3 sticky top-[57px] z-40 print:hidden">
-                    <div className="max-w-7xl mx-auto flex items-center justify-between">
-                        <button
-                            onClick={() => navigate('/dashboard')}
-                            className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-indigo-600 transition"
-                        >
-                            <ArrowLeft size={16} />
-                            Volver a Mis Reportes
-                        </button>
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-slate-500 hidden sm:inline">
-                                {report.business_name}
-                            </span>
+                {/* Public Branded Header for Shared Views */}
+                {isShared && (
+                    <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 sticky top-0 z-50 print:hidden shadow-lg backdrop-blur-md bg-opacity-95">
+                        <div className="max-w-7xl mx-auto flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <FullLogo className="h-8 w-auto text-white" />
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className="text-slate-400 text-sm hidden md:inline font-medium">¿Querés crear un análisis estratégico como este para tu negocio?</span>
+                                <button
+                                    onClick={() => navigate('/')}
+                                    className="bg-gradient-to-r from-indigo-500 to-violet-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:shadow-xl hover:shadow-indigo-500/20 hover:-translate-y-0.5 active:scale-95 transform transition-all duration-200"
+                                >
+                                    Crear mi reporte gratis
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+                )}
+
+                {/* Back button bar - hidden when printing and when shared */}
+                {!isShared && (
+                    <div className="bg-white border-b border-slate-200 px-4 py-3 sticky top-[57px] z-40 print:hidden">
+                        <div className="max-w-7xl mx-auto flex items-center justify-between">
                             <button
-                                onClick={handleDownloadPDF}
-                                disabled={downloading}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition disabled:opacity-50"
+                                onClick={() => navigate('/dashboard')}
+                                className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-indigo-600 transition"
                             >
-                                {downloading ? (
-                                    <Loader2 size={14} className="animate-spin" />
-                                ) : (
-                                    <Download size={14} />
-                                )}
-                                <span className="hidden sm:inline">{downloading ? 'Generando...' : 'PDF'}</span>
+                                <ArrowLeft size={16} />
+                                Volver a Mis Reportes
                             </button>
-                            <button
-                                onClick={() => setServicesModalOpen(true)}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-violet-600 to-emerald-600 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"
-                                title="Análisis Avanzados"
-                            >
-                                <Zap size={14} />
-                                <span className="hidden sm:inline">Más Análisis</span>
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setProfundizarSection(null);
-                                    setProfundizarOpen(true);
-                                }}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-sm font-semibold hover:bg-amber-100 transition"
-                            >
-                                <Sparkles size={14} />
-                                <span className="hidden sm:inline">{lang === 'es' ? 'Profundizar' : 'Deep Dive AI'}</span>
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-slate-500 hidden sm:inline">
+                                    {report.business_name}
+                                </span>
+                                <button
+                                    onClick={handleDownloadPDF}
+                                    disabled={downloading}
+                                    className="flex items-center gap-1.5 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition disabled:opacity-50"
+                                >
+                                    {downloading ? (
+                                        <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                        <Download size={14} />
+                                    )}
+                                    <span className="hidden sm:inline">{downloading ? 'Generando...' : 'PDF'}</span>
+                                </button>
+                                <button
+                                    onClick={() => setServicesModalOpen(true)}
+                                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-violet-600 to-emerald-600 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"
+                                    title="Análisis Avanzados"
+                                >
+                                    <Zap size={14} />
+                                    <span className="hidden sm:inline">Más Análisis</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setProfundizarSection(null);
+                                        setProfundizarOpen(true);
+                                    }}
+                                    className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-sm font-semibold hover:bg-amber-100 transition"
+                                >
+                                    <Sparkles size={14} />
+                                    <span className="hidden sm:inline">{lang === 'es' ? 'Profundizar' : 'Deep Dive AI'}</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 {/* Enrichment Data Cards (Apify real data) */}
                 <EnrichmentCards
@@ -290,27 +315,48 @@ export default function ReportView({ lang }: ReportViewProps) {
                 <Dashboard
                     data={((report.analysis_result as any)?.result || report.analysis_result) as StrategicAnalysis}
                     lang={lang}
-                    onReset={() => navigate('/dashboard')}
-                    onProfundizar={(title, content) => {
+                    onReset={isShared ? undefined : () => navigate('/dashboard')}
+                    onProfundizar={isShared ? undefined : (title, content) => {
                         setProfundizarSection({ title, content });
                         setProfundizarOpen(true);
                     }}
                 />
 
-                {/* ProfundizarPanel — now driven by per-card buttons too */}
-                <ProfundizarPanel
-                    isOpen={profundizarOpen}
-                    onClose={() => setProfundizarOpen(false)}
-                    sectionTitle={profundizarSection?.title || (lang === 'es' ? 'Informe de Negocio Completo' : 'Full Business Report')}
-                    sectionContent={profundizarSection?.content || (() => {
-                        const d = ((report.analysis_result as any)?.result || report.analysis_result) as StrategicAnalysis;
-                        return `Market: ${d.marketInsights?.industry || ''}. Personas: ${d.demandMap?.map(p => p.name).join(', ') || ''}. Competitors: ${d.competitors?.map((c: any) => c.name).join(', ') || ''}. Blue Ocean: ${d.blueOcean?.diagnosis || ''}. Actions: ${d.actionPlan?.slice(0, 3).join('. ') || ''}`;
-                    })()}
-                    reportContext={`Negocio: ${report.business_name || ''}. Industria: ${((report.analysis_result as any)?.result || report.analysis_result)?.marketInsights?.industry || ''}`}
-                    reportId={reportId || ''}
-                    reportType="business"
-                    lang={lang}
-                />
+                {/* Bottom Branded CTA Banner for Shared Public Views */}
+                {isShared && (
+                    <div className="bg-slate-900 text-white border-t border-slate-800 px-6 py-12 text-center print:hidden relative overflow-hidden mt-12 rounded-[2.5rem] max-w-7xl mx-auto mb-10">
+                        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
+                        <div className="relative z-10 max-w-xl mx-auto">
+                            <h3 className="text-2xl font-black mb-3">¿Tu negocio está listo para el siguiente nivel?</h3>
+                            <p className="text-slate-400 mb-8 leading-relaxed">
+                                Generá tu propio informe estratégico completo con buyer personas detallados, canales de adquisición ideales y un plan de acción a 90 días en solo 10 minutos.
+                            </p>
+                            <button
+                                onClick={() => navigate('/')}
+                                className="bg-gradient-to-r from-indigo-500 to-violet-500 text-white px-8 py-3.5 rounded-2xl font-bold text-base hover:shadow-xl hover:shadow-indigo-500/20 hover:-translate-y-0.5 active:scale-95 transform transition-all duration-200"
+                            >
+                                Crear análisis de mi negocio gratis
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ProfundizarPanel — hidden when shared */}
+                {!isShared && (
+                    <ProfundizarPanel
+                        isOpen={profundizarOpen}
+                        onClose={() => setProfundizarOpen(false)}
+                        sectionTitle={profundizarSection?.title || (lang === 'es' ? 'Informe de Negocio Completo' : 'Full Business Report')}
+                        sectionContent={profundizarSection?.content || (() => {
+                            const d = ((report.analysis_result as any)?.result || report.analysis_result) as StrategicAnalysis;
+                            return `Market: ${d.marketInsights?.industry || ''}. Personas: ${d.demandMap?.map(p => p.name).join(', ') || ''}. Competitors: ${d.competitors?.map((c: any) => c.name).join(', ') || ''}. Blue Ocean: ${d.blueOcean?.diagnosis || ''}. Actions: ${d.actionPlan?.slice(0, 3).join('. ') || ''}`;
+                        })()}
+                        reportContext={`Negocio: ${report.business_name || ''}. Industria: ${((report.analysis_result as any)?.result || report.analysis_result)?.marketInsights?.industry || ''}`}
+                        reportId={reportId || ''}
+                        reportType="business"
+                        lang={lang}
+                    />
+                )}
 
                 {/* Linked Analyses Section */}
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 my-12 print:hidden">
@@ -322,16 +368,18 @@ export default function ReportView({ lang }: ReportViewProps) {
                                     {lang === 'es' ? 'Análisis Avanzados' : 'Advanced Analyses'}
                                 </h3>
                                 <p className="text-sm text-slate-500 mt-1">
-                                    {lang === 'es' ? 'Deep Dives, Auditorías Digitales y más para este negocio' : 'Deep Dives, Digital Audits and more for this business'}
+                                    {lang === 'es' ? 'Accedé a análisis específicos de producto y auditorías digitales.' : 'Access specific product analysis and digital audits.'}
                                 </p>
                             </div>
-                            <button
-                                onClick={() => setServicesModalOpen(true)}
-                                className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-violet-600 to-emerald-600 text-white rounded-xl font-bold text-sm hover:shadow-lg transition-all transform hover:-translate-y-0.5"
-                            >
-                                <Zap size={16} className="text-yellow-300" />
-                                {lang === 'es' ? 'Nuevo Análisis' : 'New Analysis'}
-                            </button>
+                            {!isShared && (
+                                <button
+                                    onClick={() => setServicesModalOpen(true)}
+                                    className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-violet-600 to-emerald-600 text-white rounded-xl font-bold text-sm hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+                                >
+                                    <Zap size={16} className="text-yellow-300" />
+                                    {lang === 'es' ? 'Nuevo Análisis' : 'New Analysis'}
+                                </button>
+                            )}
                         </div>
 
                         {(linkedDeepDives.length > 0 || linkedAudits.length > 0) ? (
@@ -343,7 +391,7 @@ export default function ReportView({ lang }: ReportViewProps) {
                                     return (
                                         <button
                                             key={dd.id}
-                                            onClick={() => navigate(`/deep-dive/report/${dd.id}`)}
+                                            onClick={() => navigate(isShared ? `/shared/deep-dive/${dd.id}` : `/deep-dive/report/${dd.id}`)}
                                             className="bg-white rounded-2xl p-5 border border-slate-200 text-left hover:shadow-lg hover:border-violet-300 transition-all group"
                                         >
                                             <div className="flex items-start justify-between mb-3">
@@ -369,7 +417,7 @@ export default function ReportView({ lang }: ReportViewProps) {
                                     return (
                                         <button
                                             key={audit.id}
-                                            onClick={() => navigate(`/digital-audit/report/${audit.id}`)}
+                                            onClick={() => navigate(isShared ? `/shared/digital-audit/${audit.id}` : `/digital-audit/report/${audit.id}`)}
                                             className="bg-white rounded-2xl p-5 border border-slate-200 text-left hover:shadow-lg hover:border-emerald-300 transition-all group"
                                         >
                                             <div className="flex items-start justify-between mb-3">
@@ -406,14 +454,16 @@ export default function ReportView({ lang }: ReportViewProps) {
                 </div>
 
                 {/* Feedback trigger */}
-                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 my-8 print:hidden">
-                    <FeedbackModal
-                        reportId={reportId}
-                        reportType="business"
-                        userId={user!.id}
-                        lang={lang}
-                    />
-                </div>
+                {!isShared && (
+                    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 my-8 print:hidden">
+                        <FeedbackModal
+                            reportId={reportId}
+                            reportType="business"
+                            userId={user!.id}
+                            lang={lang}
+                        />
+                    </div>
+                )}
 
                 {/* --- NUEVO BLOQUE: Solo visible si es un pago voluntario Y aún no pagó --- */}
                 {report.is_voluntary_payment && report.payment_status !== 'paid' && (
