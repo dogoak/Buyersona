@@ -89,16 +89,6 @@ export default function AppHeader({ lang, setLang }: AppHeaderProps) {
 
             {/* Right: User Actions */}
             <div className="flex items-center gap-2">
-                {/* Language Switcher */}
-                <button
-                    onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
-                    className="flex items-center text-slate-500 hover:text-indigo-600 transition text-sm font-semibold p-2 rounded-lg hover:bg-slate-50"
-                    aria-label="Switch Language"
-                >
-                    <Globe size={16} className="mr-1" />
-                    <span className="text-xs">{lang === 'en' ? 'ES' : 'EN'}</span>
-                </button>
-
                 {user ? (
                     /* Logged in: Avatar + Dropdown */
                     <div className="relative" ref={dropdownRef}>

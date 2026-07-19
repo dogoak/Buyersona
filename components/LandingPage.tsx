@@ -64,22 +64,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
         </div>
         <div className="flex items-center gap-1 sm:gap-4">
           <button
-            onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
-            className="flex items-center text-slate-600 hover:text-indigo-600 transition text-sm font-semibold p-2"
-            aria-label="Switch Language"
-          >
-            <Globe size={18} className="sm:mr-1" />
-            <span className="hidden sm:inline">{lang === 'en' ? 'ES' : 'EN'}</span>
-          </button>
-          <button
             onClick={onLogin}
-            className="text-slate-600 font-semibold hover:text-indigo-600 transition text-sm whitespace-nowrap px-2 sm:px-4"
+            className="text-slate-600 font-semibold hover:text-indigo-600 transition-all duration-200 ease-out text-sm whitespace-nowrap px-2 sm:px-4 active:scale-95"
           >
             {t.cta_login}
           </button>
           <button
             onClick={onRegister}
-            className="bg-slate-900 text-white px-3 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold hover:bg-slate-800 transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-xs sm:text-base whitespace-nowrap"
+            className="bg-slate-900 text-white px-3 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold hover:bg-slate-800 transition-all duration-200 ease-out active:scale-[0.98] shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-xs sm:text-base whitespace-nowrap"
           >
             {t.cta_start}
           </button>
@@ -87,7 +79,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
       </nav>
 
       {/* Hero */}
-      <div className="flex-grow flex flex-col justify-center items-center px-4 pt-16 pb-24 sm:pt-24 text-center max-w-5xl mx-auto">
+      <section id="hero" className="flex-grow flex flex-col justify-center items-center px-4 pt-16 pb-24 sm:pt-24 text-center max-w-5xl mx-auto">
 
         <FullLogo className="h-12 sm:h-24 w-auto max-w-[200px] sm:max-w-xs mb-10 text-slate-900" />
 
@@ -114,7 +106,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
         <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto mb-16 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
           <button
             onClick={onRegister}
-            className="group flex items-center justify-center bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-lg px-8 py-4 rounded-2xl font-bold hover:shadow-indigo-500/30 hover:shadow-2xl transition-all transform hover:-translate-y-1"
+            className="group flex items-center justify-center bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-lg px-8 py-4 rounded-2xl font-bold hover:shadow-indigo-500/30 hover:shadow-2xl transition-all duration-200 ease-out transform hover:-translate-y-0.5 active:scale-[0.98]"
           >
             {t.cta_start}
             <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
@@ -123,7 +115,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
 
         {/* Feature Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full text-left animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-xl shadow-slate-200/50 hover:bg-white transition duration-300 group">
+          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-indigo-50/50 shadow-xl shadow-slate-200/50 hover:bg-white transition-all duration-200 ease-out hover:shadow-2xl hover:-translate-y-0.5 group">
             <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 mb-6 group-hover:scale-110 transition-transform duration-300">
               <Target size={28} />
             </div>
@@ -131,7 +123,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
             <p className="text-slate-500 leading-relaxed">Identifica tus buyer personas primarios y secundarios con precisión.</p>
           </div>
 
-          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-xl shadow-slate-200/50 hover:bg-white transition duration-300 group">
+          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-indigo-50/50 shadow-xl shadow-slate-200/50 hover:bg-white transition-all duration-200 ease-out hover:shadow-2xl hover:-translate-y-0.5 group">
             <div className="w-14 h-14 bg-fuchsia-50 rounded-2xl flex items-center justify-center text-fuchsia-600 mb-6 group-hover:scale-110 transition-transform duration-300">
               <TrendingUp size={28} />
             </div>
@@ -139,7 +131,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
             <p className="text-slate-500 leading-relaxed">Descubre en qué canales digitales y físicos se esconde tu demanda real.</p>
           </div>
 
-          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-xl shadow-slate-200/50 hover:bg-white transition duration-300 group">
+          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-indigo-50/50 shadow-xl shadow-slate-200/50 hover:bg-white transition-all duration-200 ease-out hover:shadow-2xl hover:-translate-y-0.5 group">
             <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 mb-6 group-hover:scale-110 transition-transform duration-300">
               <BarChart3 size={28} />
             </div>
@@ -147,7 +139,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
             <p className="text-slate-500 leading-relaxed">Calcula tu capacidad operativa para escalar de forma sostenible.</p>
           </div>
 
-          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-xl shadow-slate-200/50 hover:bg-white transition duration-300 group relative overflow-hidden">
+          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-indigo-50/50 shadow-xl shadow-slate-200/50 hover:bg-white transition-all duration-200 ease-out hover:shadow-2xl hover:-translate-y-0.5 group relative overflow-hidden">
             <div className="absolute top-0 right-0 bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-bl-xl">NEW</div>
             <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600 mb-6 group-hover:scale-110 transition-transform duration-300">
               <Globe size={28} />
@@ -156,7 +148,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
             <p className="text-slate-500 leading-relaxed">Espía a tu competencia y escucha conversaciones reales en redes.</p>
           </div>
 
-          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-xl shadow-slate-200/50 hover:bg-white transition duration-300 group">
+          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-indigo-50/50 shadow-xl shadow-slate-200/50 hover:bg-white transition-all duration-200 ease-out hover:shadow-2xl hover:-translate-y-0.5 group">
             <div className="w-14 h-14 bg-cyan-50 rounded-2xl flex items-center justify-center text-cyan-600 mb-6 group-hover:scale-110 transition-transform duration-300">
               <Waves size={28} />
             </div>
@@ -164,7 +156,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
             <p className="text-slate-500 leading-relaxed">Descubre océanos azules y deja de competir por precio.</p>
           </div>
 
-          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-xl shadow-slate-200/50 hover:bg-white transition duration-300 group">
+          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-indigo-50/50 shadow-xl shadow-slate-200/50 hover:bg-white transition-all duration-200 ease-out hover:shadow-2xl hover:-translate-y-0.5 group">
             <div className="w-14 h-14 bg-lime-50 rounded-2xl flex items-center justify-center text-lime-600 mb-6 group-hover:scale-110 transition-transform duration-300">
               <ClipboardList size={28} />
             </div>
@@ -172,7 +164,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
             <p className="text-slate-500 leading-relaxed">Un plan de ejecución paso a paso priorizado por impacto.</p>
           </div>
 
-          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-xl shadow-slate-200/50 hover:bg-white transition duration-300 group">
+          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-indigo-50/50 shadow-xl shadow-slate-200/50 hover:bg-white transition-all duration-200 ease-out hover:shadow-2xl hover:-translate-y-0.5 group">
             <div className="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600 mb-6 group-hover:scale-110 transition-transform duration-300">
               <Activity size={28} />
             </div>
@@ -180,7 +172,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
             <p className="text-slate-500 leading-relaxed">Benchmarks de tu industria: CAC, conversión y ciclos de venta.</p>
           </div>
 
-          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-white/50 shadow-xl shadow-slate-200/50 hover:bg-white transition duration-300 group relative overflow-hidden">
+          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-3xl border border-indigo-50/50 shadow-xl shadow-slate-200/50 hover:bg-white transition-all duration-200 ease-out hover:shadow-2xl hover:-translate-y-0.5 group relative overflow-hidden">
             <div className="absolute top-0 right-0 bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-bl-xl">NEW</div>
             <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 mb-6 group-hover:scale-110 transition-transform duration-300">
               <Package size={28} />
@@ -200,10 +192,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
           </div>
           */}
         </div>
-      </div>
+      </section>
 
       {/* Pricing Section */}
-      <div className="py-20 px-4 sm:px-8 bg-white" id="pricing">
+      <section className="py-20 px-4 sm:px-8 bg-white" id="pricing">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-14">
             <span className="inline-block bg-indigo-50 text-indigo-700 font-bold text-xs uppercase tracking-wider px-4 py-1.5 rounded-full mb-4">
@@ -221,7 +213,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
 
           <div className="grid grid-cols-1 lg:grid-cols-3 md:grid-cols-2 gap-6 max-w-6xl mx-auto">
             {/* Business Analysis */}
-            <div className="relative bg-gradient-to-br from-white to-indigo-50/40 rounded-3xl border-2 border-indigo-200 p-8 text-center shadow-lg shadow-indigo-100/50">
+            <div className="relative flex flex-col bg-gradient-to-br from-white to-indigo-50/40 rounded-3xl border-2 border-indigo-200 p-8 text-center shadow-lg shadow-indigo-100/50 transition-all duration-200 ease-out hover:shadow-xl hover:-translate-y-0.5">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-bold px-4 py-1 rounded-full">
                 {lang === 'es' ? 'MÁS POPULAR' : 'MOST POPULAR'}
               </div>
@@ -257,14 +249,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
               </ul>
               <button
                 onClick={onRegister}
-                className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white py-3.5 rounded-2xl font-bold text-lg hover:shadow-xl hover:shadow-indigo-200 transition-all transform hover:-translate-y-0.5"
+                className="w-full mt-auto bg-gradient-to-r from-indigo-600 to-violet-600 text-white py-3.5 rounded-2xl font-bold text-lg hover:shadow-xl hover:shadow-indigo-200 transition-all duration-200 ease-out transform hover:-translate-y-0.5 active:scale-[0.98]"
               >
                 {lang === 'es' ? 'Comenzar ahora' : 'Start now'}
               </button>
             </div>
 
             {/* Product Deep Dive */}
-            <div className="relative bg-gradient-to-br from-white to-violet-50/40 rounded-3xl border-2 border-violet-200 p-8 text-center shadow-lg shadow-violet-100/50">
+            <div className="relative flex flex-col bg-gradient-to-br from-white to-violet-50/40 rounded-3xl border-2 border-violet-200 p-8 text-center shadow-lg shadow-violet-100/50 transition-all duration-200 ease-out hover:shadow-xl hover:-translate-y-0.5">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-violet-600 text-white text-xs font-bold px-4 py-1 rounded-full">
                 {lang === 'es' ? 'DISPONIBLE' : 'AVAILABLE'}
               </div>
@@ -303,14 +295,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
               </p>
               <button
                 onClick={onRegister}
-                className="w-full bg-gradient-to-r from-violet-600 to-purple-600 text-white py-3.5 rounded-2xl font-bold text-lg hover:shadow-xl hover:shadow-violet-200 transition-all transform hover:-translate-y-0.5"
+                className="w-full mt-auto bg-gradient-to-r from-violet-600 to-purple-600 text-white py-3.5 rounded-2xl font-bold text-lg hover:shadow-xl hover:shadow-violet-200 transition-all duration-200 ease-out transform hover:-translate-y-0.5 active:scale-[0.98]"
               >
                 {lang === 'es' ? 'Comenzar ahora' : 'Start now'}
               </button>
             </div>
 
             {/* Digital Audit */}
-            <div className="relative bg-gradient-to-br from-white to-emerald-50/40 rounded-3xl border-2 border-emerald-200 p-8 text-center shadow-lg shadow-emerald-100/50">
+            <div className="relative flex flex-col bg-gradient-to-br from-white to-emerald-50/40 rounded-3xl border-2 border-emerald-200 p-8 text-center shadow-lg shadow-emerald-100/50 transition-all duration-200 ease-out hover:shadow-xl hover:-translate-y-0.5">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-xs font-bold px-4 py-1 rounded-full">
                 {lang === 'es' ? 'NUEVO' : 'NEW'}
               </div>
@@ -351,17 +343,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
               </p>
               <button
                 onClick={onRegister}
-                className="w-full bg-gradient-to-r from-emerald-600 to-green-600 text-white py-3.5 rounded-2xl font-bold text-lg hover:shadow-xl hover:shadow-emerald-200 transition-all transform hover:-translate-y-0.5"
+                className="w-full mt-auto bg-gradient-to-r from-emerald-600 to-green-600 text-white py-3.5 rounded-2xl font-bold text-lg hover:shadow-xl hover:shadow-emerald-200 transition-all duration-200 ease-out transform hover:-translate-y-0.5 active:scale-[0.98]"
               >
                 {lang === 'es' ? 'Comenzar ahora' : 'Start now'}
               </button>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* ─── UPCOMING MODULES / LABORATORIO ─── */}
-      <div className="relative py-20 overflow-hidden">
+      <section className="relative py-20 overflow-hidden">
         {/* Dark gradient background */}
         <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-950 to-violet-950" />
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(120,119,198,0.3), transparent 50%), radial-gradient(circle at 80% 20%, rgba(74,222,128,0.2), transparent 50%)' }} />
@@ -443,7 +435,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
             ].map((module, i) => (
               <div
                 key={i}
-                className={`group relative ${module.bg} border rounded-2xl p-6 backdrop-blur-sm hover:scale-[1.03] transition-all duration-300 cursor-default`}
+                className={`group relative ${module.bg} border rounded-2xl p-6 backdrop-blur-sm hover:scale-[1.03] transition-all duration-200 ease-out cursor-default`}
               >
                 <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${module.gradient} flex items-center justify-center mb-4 shadow-lg`}>
                   <module.icon size={20} className="text-white" />
@@ -457,7 +449,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ lang, setLang, onLogin
             ))}
           </div>
         </div>
-      </div>
+      </section>
 
       <footer className="bg-white border-t border-slate-100 py-12 flex flex-col items-center justify-center text-center">
         <FullLogo className="h-8 w-auto text-slate-300 mb-6 opacity-50 hover:opacity-100 transition-opacity duration-300" />
