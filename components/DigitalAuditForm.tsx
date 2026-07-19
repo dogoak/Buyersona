@@ -236,7 +236,10 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
     const autocompleteRef = React.useRef<any>(null);
 
     React.useEffect(() => {
-        if (step !== 'review') return;
+        if (step !== 'review') {
+            autocompleteRef.current = null;
+            return;
+        }
         // Load Google Maps JS API if not already loaded
         const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || '';
         const scriptId = 'google-maps-script';
@@ -246,6 +249,7 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
             script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&libraries=places`;
             script.async = true;
             script.onload = () => initAutocomplete();
+            script.onerror = (e) => console.error('Error loading Google Maps script:', e);
             document.head.appendChild(script);
         } else if ((window as any).google?.maps?.places) {
             initAutocomplete();
@@ -253,20 +257,37 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
     }, [step]);
 
     const initAutocomplete = () => {
-        if (!googleInputRef.current || autocompleteRef.current) return;
+        console.log('Initializing Google Autocomplete. Input ref:', googleInputRef.current);
+        if (!googleInputRef.current) {
+            console.warn('Google Input Ref is null, cannot initialize autocomplete.');
+            return;
+        }
+        if (autocompleteRef.current) {
+            console.log('Autocomplete already initialized.');
+            return;
+        }
         const google = (window as any).google;
-        if (!google?.maps?.places) return;
-        const ac = new google.maps.places.Autocomplete(googleInputRef.current, {
-            types: ['establishment'],
-        });
-        ac.addListener('place_changed', () => {
-            const place = ac.getPlace();
-            if (place) {
-                setGoogleMapsQuery(place.name + (place.formatted_address ? ` — ${place.formatted_address}` : ''));
-                setGooglePlaceId(place.place_id || '');
-            }
-        });
-        autocompleteRef.current = ac;
+        if (!google?.maps?.places) {
+            console.error('Google Maps Places library is not available.');
+            return;
+        }
+        try {
+            const ac = new google.maps.places.Autocomplete(googleInputRef.current, {
+                types: ['establishment'],
+            });
+            console.log('Google Autocomplete initialized successfully:', ac);
+            ac.addListener('place_changed', () => {
+                const place = ac.getPlace();
+                console.log('Place selected:', place);
+                if (place) {
+                    setGoogleMapsQuery(place.name + (place.formatted_address ? ` — ${place.formatted_address}` : ''));
+                    setGooglePlaceId(place.place_id || '');
+                }
+            });
+            autocompleteRef.current = ac;
+        } catch (err) {
+            console.error('Error instantiating Google Autocomplete:', err);
+        }
     };
 
     // ── STEP 1: Just the main URL ───────────────────────────────────
