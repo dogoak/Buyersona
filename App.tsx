@@ -1,5 +1,5 @@
 import React, { useState, Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Auth/Login';
 import PaymentResult from './components/Checkout/PaymentResult';
@@ -300,11 +300,22 @@ function OnboardingPage({ lang }: { lang: Language }) {
   return <Onboarding lang={lang} onComplete={handleOnboardingComplete} onStepChange={handleStepChange} />;
 }
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
+
 function App() {
   const [lang, setLang] = useState<Language>('es');
 
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         {/* Global Header - hides on landing and login pages */}
         <AppHeader lang={lang} setLang={setLang} />
