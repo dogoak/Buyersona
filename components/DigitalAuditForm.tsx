@@ -242,6 +242,7 @@ export default function DigitalAuditForm({ lang, onComplete, onCancel, parentAna
         }
         // Load Google Maps JS API if not already loaded
         const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || '';
+        console.log('Loading Google Maps script. API Key prefix:', MAPS_KEY ? `${MAPS_KEY.substring(0, 10)}... (length: ${MAPS_KEY.length})` : 'EMPTY');
         const scriptId = 'google-maps-script';
         if (!document.getElementById(scriptId)) {
             const script = document.createElement('script');
