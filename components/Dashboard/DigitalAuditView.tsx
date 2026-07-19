@@ -400,6 +400,15 @@ export default function DigitalAuditView() {
         return () => clearInterval(interval);
     }, [generating]);
 
+    useEffect(() => {
+        if (!loading && !generating && result && window.location.search.includes('print=true')) {
+            const timer = setTimeout(() => {
+                window.print();
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [loading, generating, result]);
+
     // ── GENERATING STATE ─────────────────────────────────────────────
     if (generating) {
         return (

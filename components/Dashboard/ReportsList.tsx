@@ -38,6 +38,22 @@ export default function ReportsList() {
     const [servicesModalOpen, setServicesModalOpen] = useState(false);
     const [servicesModalReportId, setServicesModalReportId] = useState('');
     const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; type: 'business' | 'product' | 'digital_audit'; name: string } | null>(null);
+    const [toastMessage, setToastMessage] = useState<string | null>(null);
+    const [activeCardId, setActiveCardId] = useState<string | null>(null);
+
+    const showToast = (msg: string) => {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(null), 3000);
+    };
+
+    const getReportUrl = (report: Report) => {
+        const path = report.type === 'product'
+            ? `/deep-dive/report/${report.id}`
+            : report.type === 'digital_audit'
+                ? `/digital-audit/report/${report.id}`
+                : `/dashboard/report/${report.id}`;
+        return window.location.origin + path;
+    };
 
     const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'Usuario';
     const firstName = userName.split(' ')[0];
@@ -401,13 +417,19 @@ export default function ReportsList() {
                                             handleCardAction();
                                         }
                                     }}
+                                    onMouseDown={(e) => {
+                                        if ((e.target as HTMLElement).closest('button')) return;
+                                        if (isClickable) setActiveCardId(report.id);
+                                    }}
+                                    onMouseUp={() => setActiveCardId(null)}
+                                    onMouseLeave={() => setActiveCardId(null)}
                                     role={isClickable ? 'button' : undefined}
                                     tabIndex={isClickable ? 0 : undefined}
                                     aria-label={isClickable ? `Ver reporte de ${report.business_name}` : undefined}
                                     className={`bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 transition-all duration-200 ease-out group focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${isClickable
-                                        ? 'hover:shadow-lg hover:border-indigo-200 cursor-pointer hover:-translate-y-0.5 transform active:scale-[0.99] active:translate-y-0'
+                                        ? 'hover:shadow-lg hover:border-indigo-200 cursor-pointer hover:-translate-y-0.5 transform'
                                         : ''
-                                        }`}
+                                        } ${activeCardId === report.id ? 'scale-[0.99] translate-y-0' : ''}`}
                                 >
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                         {/* Report Info */}
@@ -464,14 +486,27 @@ export default function ReportsList() {
                                                         </button>
                                                     )}
                                                     <button
-                                                        onClick={(e) => e.stopPropagation()}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const url = getReportUrl(report);
+                                                            navigator.clipboard.writeText(url);
+                                                            showToast('¡Enlace de reporte copiado al portapapeles!');
+                                                        }}
                                                         title="Compartir"
                                                         className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors duration-200 active:scale-90"
                                                     >
                                                         <Share2 size={15} />
                                                     </button>
                                                     <button
-                                                        onClick={(e) => e.stopPropagation()}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const path = report.type === 'product'
+                                                                ? `/deep-dive/report/${report.id}`
+                                                                : report.type === 'digital_audit'
+                                                                    ? `/digital-audit/report/${report.id}`
+                                                                    : `/dashboard/report/${report.id}`;
+                                                            navigate(path + '?print=true');
+                                                        }}
                                                         title="Descargar PDF"
                                                         className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors duration-200 active:scale-90"
                                                     >
@@ -646,6 +681,13 @@ export default function ReportsList() {
                         </div>
                     </div>
                 </>
+            )}
+
+            {toastMessage && (
+                <div className="fixed bottom-5 right-5 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl z-50 flex items-center gap-2 animate-fade-in-up font-semibold text-sm">
+                    <CheckCircle className="text-emerald-400" size={18} />
+                    {toastMessage}
+                </div>
             )}
         </div>
     );

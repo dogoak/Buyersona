@@ -157,6 +157,15 @@ export default function DeepDiveView() {
         return () => clearInterval(interval);
     }, [generating, insights.length]);
 
+    useEffect(() => {
+        if (!loading && !generating && result && window.location.search.includes('print=true')) {
+            const timer = setTimeout(() => {
+                window.print();
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [loading, generating, result]);
+
     if (generating) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-slate-900 via-violet-950 to-slate-900 flex flex-col items-center justify-center p-8 relative overflow-hidden">

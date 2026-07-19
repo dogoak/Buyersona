@@ -85,6 +85,15 @@ export default function ReportView({ lang }: ReportViewProps) {
         }
     }, [report]);
 
+    useEffect(() => {
+        if (!loading && report?.status === 'completed' && window.location.search.includes('print=true')) {
+            const timer = setTimeout(() => {
+                window.print();
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [loading, report]);
+
     const [analyzing, setAnalyzing] = useState(false);
 
     const runAnalysis = async (currentReport: any) => {
