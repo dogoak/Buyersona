@@ -48,8 +48,8 @@ export default function PrivacyPolicy() {
 
                     <h2>3. Inteligencia Artificial</h2>
                     <p>
-                        Utilizamos modelos de IA (Google Gemini) para procesar la información de tu negocio y generar análisis estratégicos.
-                        Los datos que proporcionás son enviados a estos servicios de IA exclusivamente para generar tu informe.
+                        Utilizamos modelos de inteligencia artificial provistos por Google Cloud para procesar la información de tu negocio y generar análisis estratégicos.
+                        Los datos que proporcionás son enviados a estos servicios exclusivamente para generar tu informe.
                         No utilizamos tus datos para entrenar modelos de IA de terceros.
                     </p>
 

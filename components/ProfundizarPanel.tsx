@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { profundizarSection } from '../services/profundizarService';
 import { Language } from '../types';
 import { X, Send, Loader2, Sparkles, MessageCircle, Lock, ChevronRight, HelpCircle, Clock, ArrowLeft } from 'lucide-react';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface ProfundizarPanelProps {
     isOpen: boolean;
@@ -265,22 +266,38 @@ export default function ProfundizarPanel({
                                                     const itemKey = `${section}-${i}`;
                                                     const isExpanded = expandedItems.has(itemKey);
                                                     return (
-                                                        <button
+                                                        <div
                                                             key={i}
-                                                            onClick={() => toggleExpand(itemKey)}
                                                             className="pl-3 text-left w-full hover:bg-violet-50/50 rounded-lg py-2 px-2 transition-colors group"
                                                         >
-                                                            <div className="flex items-center justify-between gap-2 mb-1">
+                                                            <div 
+                                                                onClick={() => toggleExpand(itemKey)}
+                                                                className="flex items-center justify-between gap-2 mb-1 cursor-pointer"
+                                                            >
                                                                 <span className="text-[10px] text-slate-400">
                                                                     {new Date(fu.created_at).toLocaleDateString(lang === 'es' ? 'es-AR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                                                 </span>
                                                                 <ChevronRight size={12} className={`text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                                                             </div>
-                                                            <p className="text-xs font-semibold text-violet-700 mb-1">{fu.user_question}</p>
-                                                            <p className={`text-xs text-slate-600 leading-relaxed whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-3'}`}>
-                                                                {fu.ai_response}
+                                                            <p 
+                                                                onClick={() => toggleExpand(itemKey)}
+                                                                className="text-xs font-semibold text-violet-700 mb-1 cursor-pointer"
+                                                            >
+                                                                {fu.user_question}
                                                             </p>
-                                                        </button>
+                                                            {isExpanded ? (
+                                                                <div className="text-xs mt-2 pl-1 border-l border-slate-200">
+                                                                    <MarkdownRenderer text={fu.ai_response} />
+                                                                </div>
+                                                            ) : (
+                                                                <p 
+                                                                    onClick={() => toggleExpand(itemKey)}
+                                                                    className="text-xs text-slate-600 leading-relaxed line-clamp-3 cursor-pointer"
+                                                                >
+                                                                    {fu.ai_response}
+                                                                </p>
+                                                            )}
+                                                        </div>
                                                     );
                                                 })}
                                             </div>
@@ -319,8 +336,8 @@ export default function ProfundizarPanel({
                                         </div>
                                     </div>
                                     <div className="flex justify-start">
-                                        <div className="bg-slate-100 text-slate-800 rounded-2xl rounded-bl-sm px-4 py-3 max-w-[85%] text-sm leading-relaxed whitespace-pre-wrap">
-                                            {fu.ai_response}
+                                        <div className="bg-slate-100 text-slate-800 rounded-2xl rounded-bl-sm px-4 py-3 max-w-[85%] text-sm leading-relaxed">
+                                            <MarkdownRenderer text={fu.ai_response} />
                                         </div>
                                     </div>
                                 </div>
